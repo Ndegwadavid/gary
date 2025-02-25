@@ -36,9 +36,7 @@ const Rave: React.FC<RaveProps> = ({ user }) => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [isHost, setIsHost] = useState(false);
-  const [currentTrack, setCurrentTrack] = useState<Track>({
-    videoId: 'dQw4w9WgXcQ',
-  });
+  const [currentTrack, setCurrentTrack] = useState<Track>({}); // No default track
   const [messages, setMessages] = useState<Message[]>([]);
   const [onlineUsers, setOnlineUsers] = useState<{ id: string; name: string }[]>([]);
   const [peerConnection, setPeerConnection] = useState<RTCPeerConnection | null>(null);
@@ -73,6 +71,9 @@ const Rave: React.FC<RaveProps> = ({ user }) => {
       setCurrentTrack((prev) => ({ ...prev }));
     });
     socket.on('pause', (timestamp: number) => {
+      setCurrentTrack((prev) => ({ ...prev }));
+    });
+    socket.on('stop', () => {
       setCurrentTrack((prev) => ({ ...prev }));
     });
     socket.on('chat-message', (message: Message) => {
@@ -127,6 +128,7 @@ const Rave: React.FC<RaveProps> = ({ user }) => {
       socket.off('track-changed');
       socket.off('play');
       socket.off('pause');
+      socket.off('stop');
       socket.off('chat-message');
       socket.off('user-list');
       socket.off('offer');
@@ -360,20 +362,12 @@ const Rave: React.FC<RaveProps> = ({ user }) => {
             </button>
           ))}
           {isHost && (
-            <>
-              <button
-                onClick={() => changeTrack({ videoId: 'dQw4w9WgXcQ' })}
-                className="bg-blue-600 text-white p-2 rounded hover:bg-blue-700 transition"
-              >
-                Play Rickroll (YouTube)
-              </button>
-              <button
-                onClick={() => changeTrack({ audioUrl: 'https://prod-1.storage.jamendo.com/?trackid=143356&format=mp31' })}
-                className="bg-blue-600 text-white p-2 rounded hover:bg-blue-700 transition"
-              >
-                Play Sample Jamendo Track
-              </button>
-            </>
+            <button
+              onClick={() => changeTrack({ audioUrl: 'https://prod-1.storage.jamendo.com/?trackid=143356&format=mp31' })}
+              className="bg-blue-600 text-white p-2 rounded hover:bg-blue-700 transition"
+            >
+              Play Sample Jamendo Track
+            </button>
           )}
         </div>
       </div>

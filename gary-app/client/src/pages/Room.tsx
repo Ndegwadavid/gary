@@ -10,7 +10,7 @@ import io from 'socket.io-client';
 
 const getSocketUrl = () => {
   const host = window.location.hostname === 'localhost' ? 'localhost' : window.location.hostname;
-  return `http://${host}:5000`; // Update to deployed URL in production
+  return `http://${host}:5000`;
 };
 
 const socket = io(getSocketUrl(), { transports: ['websocket', 'polling'] });
@@ -58,7 +58,7 @@ const Room: React.FC<RoomProps> = ({ user }) => {
 
     socket.emit('join-room', { roomId: id, userName: user.email || 'Guest' });
     socket.on('user-joined', ({ userId, userName }: { userId: string; userName: string }) => {
-      if (!isHost) setIsHost(userId === socket.id); // Host is first joiner
+      if (!isHost) setIsHost(userId === socket.id);
       setOnlineUsers((prev) => {
         const updated = prev.filter((u) => u.name !== userName);
         return [...updated, { id: userId, name: userName }];
@@ -72,6 +72,9 @@ const Room: React.FC<RoomProps> = ({ user }) => {
       setCurrentTrack((prev) => ({ ...prev }));
     });
     socket.on('pause', (timestamp: number) => {
+      setCurrentTrack((prev) => ({ ...prev }));
+    });
+    socket.on('stop', () => {
       setCurrentTrack((prev) => ({ ...prev }));
     });
     socket.on('chat-message', (message: Message) => {
@@ -124,6 +127,7 @@ const Room: React.FC<RoomProps> = ({ user }) => {
       socket.off('track-changed');
       socket.off('play');
       socket.off('pause');
+      socket.off('stop');
       socket.off('chat-message');
       socket.off('user-list');
       socket.off('offer');
