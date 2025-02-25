@@ -37,7 +37,7 @@ const Rave: React.FC<RaveProps> = ({ user }) => {
   const [isHost, setIsHost] = useState(false);
   const [currentTrack, setCurrentTrack] = useState<Track>({});
   const [messages, setMessages] = useState<Message[]>([]);
-  const [onlineUsers, setOnlineUsers] = useState<{ id: string; name: string }[]>([]); // Restored
+  const [onlineUsers, setOnlineUsers] = useState<{ id: string; name: string }[]>([]);
   const [peerConnection, setPeerConnection] = useState<RTCPeerConnection | null>(null);
   const [videoChatActive, setVideoChatActive] = useState(false);
   const [incomingCall, setIncomingCall] = useState<{ from: string; offer: RTCSessionDescriptionInit } | null>(null);
@@ -54,11 +54,11 @@ const Rave: React.FC<RaveProps> = ({ user }) => {
     }
 
     const raveId = `rave-${id}`;
-    socket.emit('join-room', { roomId: raveId, userName: user.email || 'Guest' });
+    socket.emit('join-room', { roomId: raveId, userName: user.email || user.uid });
     socket.on('user-joined', ({ userId, userName }: { userId: string; userName: string }) => {
       if (!isHost) setIsHost(userId === socket.id);
       setOnlineUsers((prev) => {
-        const updated = prev.filter((u) => u.name !== userName);
+        const updated = prev.filter((u) => u.id !== userId);
         return [...updated, { id: userId, name: userName }];
       });
     });
@@ -86,9 +86,8 @@ const Rave: React.FC<RaveProps> = ({ user }) => {
     socket.on('user-list', (users: { [key: string]: { roomId?: string; userName?: string } }) => {
       const roomUsers = Object.entries(users)
         .filter(([_, data]) => data.roomId === raveId)
-        .map(([userId, data]) => ({ id: userId, name: data.userName || 'Guest' }));
-      const uniqueUsers = Array.from(new Map(roomUsers.map((u) => [u.name, u])).values());
-      setOnlineUsers(uniqueUsers);
+        .map(([userId, data]) => ({ id: userId, name: data.userName || 'Unknown' }));
+      setOnlineUsers(Array.from(new Map(roomUsers.map((u) => [u.id, u])).values()));
     });
 
     socket.on('offer', (data: { from: string; offer: RTCSessionDescriptionInit }) => {
@@ -141,7 +140,11 @@ const Rave: React.FC<RaveProps> = ({ user }) => {
 
   const startVideoChat = async () => {
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      console.error('getUserMedia not supported');
+      console.error('getUserMedia not supported in this browser/environment:', {
+        navigatorMediaDevices: !!navigator.mediaDevices,
+        getUserMedia: !!navigator.mediaDevices?.getUserMedia,
+      });
+      setCallStatus('Video chat is not supported in your browser.');
       return;
     }
 
@@ -169,11 +172,14 @@ const Rave: React.FC<RaveProps> = ({ user }) => {
 
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
-      socket.emit('offer', { roomId: `rave-${id}`, from: user.email || 'Guest', offer });
+      socket.emit('offer', { roomId: `rave-${id}`, from: user.email || user.uid, offer });
 
       setVideoChatActive(true);
-    } catch (err) {
-      console.error('Error starting video chat:', err);
+      setCallStatus(null);
+    } catch (err: unknown) {
+      const error = err as Error;
+      console.error('Error starting video chat:', error);
+      setCallStatus(`Failed to start video chat: ${error.message}`);
       setVideoChatActive(false);
     }
   };
@@ -193,8 +199,10 @@ const Rave: React.FC<RaveProps> = ({ user }) => {
 
       setVideoChatActive(true);
       setIncomingCall(null);
-    } catch (err) {
-      console.error('Error accepting call:', err);
+    } catch (err: unknown) {
+      const error = err as Error;
+      console.error('Error accepting call:', error);
+      setCallStatus(`Failed to accept call: ${error.message}`);
       setVideoChatActive(false);
     }
   };
@@ -218,7 +226,7 @@ const Rave: React.FC<RaveProps> = ({ user }) => {
     if (id && text.trim() && user) {
       const message: Message = {
         userId: socket.id || '',
-        userName: user.email || 'Guest',
+        userName: user.email || user.uid,
         text,
         timestamp: Date.now(),
       };
@@ -275,7 +283,7 @@ const Rave: React.FC<RaveProps> = ({ user }) => {
         </button>
       </div>
       <div className="mt-4 text-center">
-        <p>Online Users: {onlineUsers.length} {onlineUsers.map((u) => u.name).join(', ')}</p> {/* Restored */}
+        <p>Online Users: {onlineUsers.length} {onlineUsers.map((u) => u.name).join(', ')}</p>
       </div>
       {callStatus && (
         <div className="mt-4 text-center text-red-500">{callStatus}</div>

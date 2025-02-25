@@ -14,8 +14,6 @@ interface PlayerProps {
   roomId?: string;
 }
 
-const audioCache = new Map<string, string>(); // Simple in-memory cache
-
 const Player: React.FC<PlayerProps> = ({ audioUrl, roomId }) => {
   const audioRef = useRef<HTMLAudioElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -47,12 +45,17 @@ const Player: React.FC<PlayerProps> = ({ audioUrl, roomId }) => {
       }
     });
 
+    // Auto-sync on join if track is already playing
+    if (audioRef.current && isPlaying) {
+      audioRef.current.play().catch((err) => console.error('Auto-play error:', err));
+    }
+
     return () => {
       socket.off('play');
       socket.off('pause');
       socket.off('stop');
     };
-  }, [audioUrl, roomId]);
+  }, [audioUrl, roomId, isPlaying]);
 
   const handlePlay = () => {
     if (roomId && audioRef.current) {
@@ -81,12 +84,6 @@ const Player: React.FC<PlayerProps> = ({ audioUrl, roomId }) => {
     }
   };
 
-  useEffect(() => {
-    if (audioUrl && !audioCache.has(audioUrl)) {
-      audioCache.set(audioUrl, audioUrl); // Cache the URL (in real scenarios, preload or store blob)
-    }
-  }, [audioUrl]);
-
   return (
     <div className="bg-white bg-opacity-20 p-4 rounded-lg w-full max-w-md">
       {audioUrl ? (
@@ -96,7 +93,7 @@ const Player: React.FC<PlayerProps> = ({ audioUrl, roomId }) => {
             controls={false}
             className="w-full mb-2"
           >
-            <source src={audioCache.get(audioUrl) || audioUrl} type="audio/mpeg" />
+            <source src={audioUrl} type="audio/mpeg" />
             Your browser does not support the audio element.
           </audio>
           <div className="flex justify-center gap-4">

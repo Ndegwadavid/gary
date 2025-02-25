@@ -10,7 +10,7 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: '*', // Allow all origins for testing—restrict in production
+    origin: '*',
     methods: ['GET', 'POST'],
   },
 });
@@ -23,7 +23,7 @@ interface SyncData {
 interface TrackData {
   roomId: string;
   audioUrl?: string;
-  title?: string; // Added title for audio tracks
+  title?: string;
 }
 
 interface ChatMessage {
@@ -39,7 +39,6 @@ interface JoinData {
 interface UserData {
   roomId?: string;
   userName?: string;
-  track?: string;
 }
 
 const onlineUsers: { [key: string]: UserData } = {};
@@ -48,35 +47,23 @@ io.on('connection', (socket: Socket) => {
   console.log('User connected:', socket.id);
 
   socket.on('join-room', ({ roomId, userName }: JoinData) => {
-    // Ensure user is initialized in onlineUsers
     onlineUsers[socket.id] = { roomId, userName };
     socket.join(roomId);
     socket.to(roomId).emit('user-joined', { userId: socket.id, userName });
-    io.emit('user-list', onlineUsers);
+    io.emit('user-list', onlineUsers); // Emit full list to ensure sync
   });
 
   socket.on('play', ({ roomId, timestamp }: SyncData) => {
-    // Ensure user exists before setting track
-    if (!onlineUsers[socket.id]) {
-      onlineUsers[socket.id] = { roomId }; // Fallback initialization
-    }
-    onlineUsers[socket.id].track = 'Playing a track';
     socket.to(roomId).emit('play', timestamp);
     io.emit('user-list', onlineUsers);
   });
 
   socket.on('pause', ({ roomId, timestamp }: SyncData) => {
-    if (onlineUsers[socket.id]) {
-      onlineUsers[socket.id].track = undefined; // Clear track on pause
-    }
     socket.to(roomId).emit('pause', timestamp);
     io.emit('user-list', onlineUsers);
   });
 
   socket.on('stop', ({ roomId }: { roomId: string }) => {
-    if (onlineUsers[socket.id]) {
-      onlineUsers[socket.id].track = undefined; // Clear track on stop
-    }
     socket.to(roomId).emit('stop');
     io.emit('user-list', onlineUsers);
   });
