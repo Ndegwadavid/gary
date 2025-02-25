@@ -5,6 +5,7 @@ import {
   createUserWithEmailAndPassword,
   signInWithPopup,
 } from 'firebase/auth';
+import { useNavigate } from 'react-router-dom';
 import { auth, googleProvider } from '../firebase';
 
 interface AuthProps {
@@ -16,6 +17,7 @@ const Auth: React.FC<AuthProps> = ({ onClose }) => {
   const [password, setPassword] = useState('');
   const [isSignUp, setIsSignUp] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const navigate = useNavigate();
 
   const handleEmailAuth = async () => {
     try {
@@ -26,6 +28,7 @@ const Auth: React.FC<AuthProps> = ({ onClose }) => {
         await signInWithEmailAndPassword(auth, email, password);
       }
       onClose();
+      navigate('/me'); // Redirect to /me after success
     } catch (error: any) {
       setError(error.message);
       console.error(`${isSignUp ? 'Signup' : 'Login'} failed:`, error);
@@ -37,6 +40,7 @@ const Auth: React.FC<AuthProps> = ({ onClose }) => {
       setError(null);
       await signInWithPopup(auth, googleProvider);
       onClose();
+      navigate('/me'); // Redirect to /me after success
     } catch (error: any) {
       setError(error.message);
       console.error('Google auth failed:', error);
