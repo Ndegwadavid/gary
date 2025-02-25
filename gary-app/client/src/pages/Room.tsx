@@ -10,7 +10,7 @@ import io from 'socket.io-client';
 
 const getSocketUrl = () => {
   const host = window.location.hostname === 'localhost' ? 'localhost' : window.location.hostname;
-  return `http://${host}:5000`;
+  return `http://${host}:5000`; // Update to deployed URL in production
 };
 
 const socket = io(getSocketUrl(), { transports: ['websocket', 'polling'] });
@@ -58,7 +58,7 @@ const Room: React.FC<RoomProps> = ({ user }) => {
 
     socket.emit('join-room', { roomId: id, userName: user.email || 'Guest' });
     socket.on('user-joined', ({ userId, userName }: { userId: string; userName: string }) => {
-      if (!isHost) setIsHost(userId === socket.id);
+      if (!isHost) setIsHost(userId === socket.id); // Host is first joiner
       setOnlineUsers((prev) => {
         const updated = prev.filter((u) => u.name !== userName);
         return [...updated, { id: userId, name: userName }];
@@ -240,7 +240,6 @@ const Room: React.FC<RoomProps> = ({ user }) => {
     if (!searchQuery.trim()) return;
 
     try {
-      // YouTube search
       const youtubeResponse = await fetch(
         `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=5&q=${encodeURIComponent(searchQuery)}&key=${process.env.REACT_APP_YOUTUBE_API_KEY}`
       );
@@ -250,7 +249,6 @@ const Room: React.FC<RoomProps> = ({ user }) => {
         title: item.snippet.title,
       }));
 
-      // Jamendo search
       const jamendoResponse = await fetch(
         `https://api.jamendo.com/v3.0/tracks/?client_id=${process.env.REACT_APP_JAMENDO_CLIENT_ID}&format=json&limit=5&search=${encodeURIComponent(searchQuery)}`
       );
@@ -332,8 +330,6 @@ const Room: React.FC<RoomProps> = ({ user }) => {
           roomId={id}
           isHost={isHost}
         />
-      </div>
-      {isHost && (
         <div className="mt-4 flex flex-col gap-2 max-w-md mx-auto">
           <div className="flex gap-2">
             <input
@@ -353,26 +349,31 @@ const Room: React.FC<RoomProps> = ({ user }) => {
           {searchResults.map((result, index) => (
             <button
               key={index}
-              onClick={() => changeTrack({ videoId: result.videoId, audioUrl: result.audioUrl })}
-              className="bg-blue-500 text-white p-2 rounded hover:bg-blue-600 transition"
+              onClick={() => isHost && changeTrack({ videoId: result.videoId, audioUrl: result.audioUrl })}
+              className={`bg-blue-500 text-white p-2 rounded hover:bg-blue-600 transition ${!isHost ? 'opacity-50 cursor-not-allowed' : ''}`}
+              disabled={!isHost}
             >
-              {result.title}
+              {result.title} {isHost ? '' : '(Host Only)'}
             </button>
           ))}
-          <button
-            onClick={() => changeTrack({ videoId: 'dQw4w9WgXcQ' })}
-            className="bg-blue-600 text-white p-2 rounded hover:bg-blue-700 transition"
-          >
-            Play Rickroll (YouTube)
-          </button>
-          <button
-            onClick={() => changeTrack({ audioUrl: 'https://prod-1.storage.jamendo.com/?trackid=143356&format=mp31' })}
-            className="bg-blue-600 text-white p-2 rounded hover:bg-blue-700 transition"
-          >
-            Play Sample Jamendo Track
-          </button>
+          {isHost && (
+            <>
+              <button
+                onClick={() => changeTrack({ videoId: 'dQw4w9WgXcQ' })}
+                className="bg-blue-600 text-white p-2 rounded hover:bg-blue-700 transition"
+              >
+                Play Rickroll (YouTube)
+              </button>
+              <button
+                onClick={() => changeTrack({ audioUrl: 'https://prod-1.storage.jamendo.com/?trackid=143356&format=mp31' })}
+                className="bg-blue-600 text-white p-2 rounded hover:bg-blue-700 transition"
+              >
+                Play Sample Jamendo Track
+              </button>
+            </>
+          )}
         </div>
-      )}
+      </div>
       <Chat
         roomId={id}
         userId={socket.id || ''}

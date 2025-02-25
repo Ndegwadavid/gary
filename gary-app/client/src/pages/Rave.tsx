@@ -333,8 +333,6 @@ const Rave: React.FC<RaveProps> = ({ user }) => {
           roomId={`rave-${id}`}
           isHost={isHost}
         />
-      </div>
-      {isHost && (
         <div className="mt-4 flex flex-col gap-2 max-w-md mx-auto">
           <div className="flex gap-2">
             <input
@@ -354,26 +352,31 @@ const Rave: React.FC<RaveProps> = ({ user }) => {
           {searchResults.map((result, index) => (
             <button
               key={index}
-              onClick={() => changeTrack({ videoId: result.videoId, audioUrl: result.audioUrl })}
-              className="bg-blue-500 text-white p-2 rounded hover:bg-blue-600 transition"
+              onClick={() => isHost && changeTrack({ videoId: result.videoId, audioUrl: result.audioUrl })}
+              className={`bg-blue-500 text-white p-2 rounded hover:bg-blue-600 transition ${!isHost ? 'opacity-50 cursor-not-allowed' : ''}`}
+              disabled={!isHost}
             >
-              {result.title}
+              {result.title} {isHost ? '' : '(Host Only)'}
             </button>
           ))}
-          <button
-            onClick={() => changeTrack({ videoId: 'dQw4w9WgXcQ' })}
-            className="bg-blue-600 text-white p-2 rounded hover:bg-blue-700 transition"
-          >
-            Play Rickroll (YouTube)
-          </button>
-          <button
-            onClick={() => changeTrack({ audioUrl: 'https://prod-1.storage.jamendo.com/?trackid=143356&format=mp31' })}
-            className="bg-blue-600 text-white p-2 rounded hover:bg-blue-700 transition"
-          >
-            Play Sample Jamendo Track
-          </button>
+          {isHost && (
+            <>
+              <button
+                onClick={() => changeTrack({ videoId: 'dQw4w9WgXcQ' })}
+                className="bg-blue-600 text-white p-2 rounded hover:bg-blue-700 transition"
+              >
+                Play Rickroll (YouTube)
+              </button>
+              <button
+                onClick={() => changeTrack({ audioUrl: 'https://prod-1.storage.jamendo.com/?trackid=143356&format=mp31' })}
+                className="bg-blue-600 text-white p-2 rounded hover:bg-blue-700 transition"
+              >
+                Play Sample Jamendo Track
+              </button>
+            </>
+          )}
         </div>
-      )}
+      </div>
       <Chat
         roomId={`rave-${id}`}
         userId={socket.id || ''}
