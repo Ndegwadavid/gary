@@ -24,6 +24,7 @@ interface Message {
 interface Track {
   videoId?: string;
   audioUrl?: string;
+  title?: string; // Added title to Track interface
 }
 
 const Room: React.FC<RoomProps> = ({ user }) => {
@@ -36,6 +37,10 @@ const Room: React.FC<RoomProps> = ({ user }) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [onlineUsers, setOnlineUsers] = useState<{ id: string; name: string }[]>([]);
   const [peerConnection, setPeerConnection] = useState<RTCPeerConnection | null>(null);
+  const [videoChatActive, setVideoChatActive] = useState(false);
+  const [incomingCall, setIncomingCall] = useState<{ from: string; offer: RTCSessionDescriptionInit } | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<Track[]>([]);
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
 
@@ -45,7 +50,6 @@ const Room: React.FC<RoomProps> = ({ user }) => {
       return;
     }
 
-    // Join room with username
     socket.emit('join-room', { roomId: id, userName: user.email || 'Guest' });
     socket.on('user-joined', ({ userId, userName }: { userId: string; userName: string }) => {
       if (!isHost) setIsHost(userId === socket.id);
@@ -70,49 +74,17 @@ const Room: React.FC<RoomProps> = ({ user }) => {
       setOnlineUsers(roomUsers);
     });
 
-    const pc = new RTCPeerConnection({
-      iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
-    });
-    setPeerConnection(pc);
-
-    navigator.mediaDevices
-      .getUserMedia({ video: true, audio: true })
-      .then((stream) => {
-        if (localVideoRef.current) localVideoRef.current.srcObject = stream;
-        stream.getTracks().forEach((track) => pc.addTrack(track, stream));
-      })
-      .catch((err) => console.error('Media error:', err));
-
-    pc.ontrack = (event) => {
-      if (remoteVideoRef.current) remoteVideoRef.current.srcObject = event.streams[0];
-    };
-
-    pc.onicecandidate = (event) => {
-      if (event.candidate) {
-        socket.emit('ice-candidate', { roomId: id, candidate: event.candidate });
-      }
-    };
-
-    socket.on('offer', async (offer: RTCSessionDescriptionInit) => {
-      await pc.setRemoteDescription(new RTCSessionDescription(offer));
-      const answer = await pc.createAnswer();
-      await pc.setLocalDescription(answer);
-      socket.emit('answer', { roomId: id, answer });
+    socket.on('offer', (data: { from: string; offer: RTCSessionDescriptionInit }) => {
+      setIncomingCall(data);
     });
 
     socket.on('answer', (answer: RTCSessionDescriptionInit) => {
-      pc.setRemoteDescription(new RTCSessionDescription(answer));
+      if (peerConnection) peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
     });
 
     socket.on('ice-candidate', (candidate: RTCIceCandidateInit) => {
-      pc.addIceCandidate(new RTCIceCandidate(candidate));
+      if (peerConnection) peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
     });
-
-    if (isHost) {
-      pc.createOffer()
-        .then((offer) => pc.setLocalDescription(offer))
-        .then(() => socket.emit('offer', { roomId: id, offer: pc.localDescription }));
-    }
 
     const unsubscribe = onSnapshot(doc(db, 'rooms', id), (docSnap) => {
       if (docSnap.exists()) {
@@ -131,9 +103,67 @@ const Room: React.FC<RoomProps> = ({ user }) => {
       socket.off('answer');
       socket.off('ice-candidate');
       unsubscribe();
-      pc.close();
+      if (peerConnection) peerConnection.close();
     };
-  }, [user, id, navigate, isHost]);
+  }, [user, id, navigate, isHost, peerConnection]);
+
+  const startVideoChat = async () => {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      console.error('getUserMedia not supported');
+      return;
+    }
+
+    if (!user || !id) return; // Ensure user and id are defined
+
+    const pc = new RTCPeerConnection({
+      iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
+    });
+    setPeerConnection(pc);
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      if (localVideoRef.current) localVideoRef.current.srcObject = stream;
+      stream.getTracks().forEach((track) => pc.addTrack(track, stream));
+
+      pc.ontrack = (event) => {
+        if (remoteVideoRef.current) remoteVideoRef.current.srcObject = event.streams[0];
+      };
+
+      pc.onicecandidate = (event) => {
+        if (event.candidate && id) {
+          socket.emit('ice-candidate', { roomId: id, candidate: event.candidate });
+        }
+      };
+
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      socket.emit('offer', { roomId: id, from: user.email || 'Guest', offer });
+
+      setVideoChatActive(true);
+    } catch (err) {
+      console.error('Error starting video chat:', err);
+    }
+  };
+
+  const acceptCall = async () => {
+    if (!peerConnection || !incomingCall || !id || !user) return;
+
+    await peerConnection.setRemoteDescription(new RTCSessionDescription(incomingCall.offer));
+    const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+    if (localVideoRef.current) localVideoRef.current.srcObject = stream;
+    stream.getTracks().forEach((track) => peerConnection.addTrack(track, stream));
+
+    const answer = await peerConnection.createAnswer();
+    await peerConnection.setLocalDescription(answer);
+    socket.emit('answer', { roomId: id, answer });
+
+    setVideoChatActive(true);
+    setIncomingCall(null);
+  };
+
+  const ignoreCall = () => {
+    setIncomingCall(null);
+  };
 
   const changeTrack = (track: Track) => {
     if (isHost && id) {
@@ -146,7 +176,7 @@ const Room: React.FC<RoomProps> = ({ user }) => {
   const sendMessage = (text: string) => {
     if (id && text.trim() && user) {
       const message: Message = {
-        userId: socket.id || '', // Fallback to empty string if undefined
+        userId: socket.id || '',
         userName: user.email || 'Guest',
         text,
         timestamp: Date.now(),
@@ -162,6 +192,31 @@ const Room: React.FC<RoomProps> = ({ user }) => {
     }
   };
 
+  const copyRoomId = () => {
+    if (id) {
+      navigator.clipboard.writeText(`${window.location.origin}/room/${id}`);
+      alert('Room ID copied to clipboard!');
+    }
+  };
+
+  const searchSongs = async () => {
+    if (!searchQuery.trim()) return;
+
+    try {
+      const response = await fetch(
+        `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=5&q=${encodeURIComponent(searchQuery)}&key=${process.env.REACT_APP_YOUTUBE_API_KEY}`
+      );
+      const data = await response.json();
+      const results = data.items.map((item: any) => ({
+        videoId: item.id.videoId,
+        title: item.snippet.title,
+      }));
+      setSearchResults(results);
+    } catch (err) {
+      console.error('Search failed:', err);
+    }
+  };
+
   if (!user || !id) {
     return <div className="p-6 text-center">Please login to join a room.</div>;
   }
@@ -170,19 +225,55 @@ const Room: React.FC<RoomProps> = ({ user }) => {
     <div className="p-6">
       <h1 className="text-2xl font-bold mt-4 text-center">Room: {id}</h1>
       <div className="mt-4 text-center">
+        <button
+          onClick={copyRoomId}
+          className="bg-gray-500 text-white p-2 rounded hover:bg-gray-600 transition"
+        >
+          Copy Room ID
+        </button>
+      </div>
+      <div className="mt-4 text-center">
         <p>Online Users: {onlineUsers.length} {onlineUsers.map((u) => u.name).join(', ')}</p>
       </div>
       <div className="mt-8 flex flex-col items-center gap-4">
-        <div className="flex justify-center gap-4">
-          <div>
-            <h3 className="text-lg font-semibold mb-2">Your Video</h3>
-            <video ref={localVideoRef} autoPlay muted className="w-64 h-48 rounded-lg" />
+        {videoChatActive ? (
+          <div className="flex justify-center gap-4">
+            <div>
+              <h3 className="text-lg font-semibold mb-2">Your Video</h3>
+              <video ref={localVideoRef} autoPlay muted className="w-64 h-48 rounded-lg" />
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold mb-2">Partner's Video</h3>
+              <video ref={remoteVideoRef} autoPlay className="w-64 h-48 rounded-lg" />
+            </div>
           </div>
-          <div>
-            <h3 className="text-lg font-semibold mb-2">Partner's Video</h3>
-            <video ref={remoteVideoRef} autoPlay className="w-64 h-48 rounded-lg" />
+        ) : (
+          <button
+            onClick={startVideoChat}
+            className="bg-green-600 text-white p-3 rounded-full hover:bg-green-700 transition"
+          >
+            Start Video Chat
+          </button>
+        )}
+        {incomingCall && !videoChatActive && (
+          <div className="mt-4 bg-white bg-opacity-20 p-4 rounded-lg">
+            <p className="text-center">Incoming video call from {incomingCall.from}</p>
+            <div className="flex justify-center gap-4 mt-2">
+              <button
+                onClick={acceptCall}
+                className="bg-green-600 text-white p-2 rounded hover:bg-green-700 transition"
+              >
+                Accept
+              </button>
+              <button
+                onClick={ignoreCall}
+                className="bg-red-600 text-white p-2 rounded hover:bg-red-700 transition"
+              >
+                Ignore
+              </button>
+            </div>
           </div>
-        </div>
+        )}
         <Player
           videoId={currentTrack.videoId}
           audioUrl={currentTrack.audioUrl}
@@ -192,6 +283,30 @@ const Room: React.FC<RoomProps> = ({ user }) => {
       </div>
       {isHost && (
         <div className="mt-4 flex flex-col gap-2 max-w-md mx-auto">
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search for a song..."
+              className="flex-1 p-2 rounded text-black focus:outline-none focus:ring-2 focus:ring-purple-600"
+            />
+            <button
+              onClick={searchSongs}
+              className="bg-blue-600 text-white p-2 rounded hover:bg-blue-700 transition"
+            >
+              Search
+            </button>
+          </div>
+          {searchResults.map((result, index) => (
+            <button
+              key={index}
+              onClick={() => changeTrack({ videoId: result.videoId })}
+              className="bg-blue-500 text-white p-2 rounded hover:bg-blue-600 transition"
+            >
+              {result.title}
+            </button>
+          ))}
           <button
             onClick={() => changeTrack({ videoId: 'dQw4w9WgXcQ' })}
             className="bg-blue-600 text-white p-2 rounded hover:bg-blue-700 transition"
@@ -208,7 +323,7 @@ const Room: React.FC<RoomProps> = ({ user }) => {
       )}
       <Chat
         roomId={id}
-        userId={socket.id || ''} // Fallback to empty string
+        userId={socket.id || ''}
         messages={messages}
         sendMessage={sendMessage}
       />
