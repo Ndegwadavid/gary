@@ -1,8 +1,9 @@
 // src/pages/Me.tsx
 import { useNavigate } from 'react-router-dom';
 import { User } from 'firebase/auth';
-import { auth } from '../firebase';
-import { useState } from 'react';
+import { auth, db } from '../firebase';
+import { useState, useEffect } from 'react';
+import { collection, query, where, onSnapshot } from 'firebase/firestore';
 
 interface MeProps {
   user: User | null;
@@ -12,6 +13,19 @@ const Me: React.FC<MeProps> = ({ user }) => {
   const navigate = useNavigate();
   const [roomIdInput, setRoomIdInput] = useState('');
   const [raveIdInput, setRaveIdInput] = useState('');
+  const [myRaves, setMyRaves] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (!user) return;
+
+    const q = query(collection(db, 'raves'), where('creator', '==', user.uid));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const raves = snapshot.docs.map((doc) => doc.id);
+      setMyRaves(raves);
+    });
+
+    return () => unsubscribe();
+  }, [user]);
 
   if (!user) {
     navigate('/');
@@ -78,6 +92,25 @@ const Me: React.FC<MeProps> = ({ user }) => {
           >
             Create/Join Rave
           </button>
+        </div>
+        <div className="mt-4">
+          <h2 className="text-2xl font-semibold text-center">My Raves</h2>
+          {myRaves.length > 0 ? (
+            <ul className="mt-2 flex flex-col gap-2">
+              {myRaves.map((raveId) => (
+                <li key={raveId} className="text-center">
+                  <button
+                    onClick={() => navigate(`/rave/${raveId}`)}
+                    className="bg-yellow-600 text-white p-2 rounded hover:bg-yellow-700 transition"
+                  >
+                    {raveId}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-center">No raves created yet.</p>
+          )}
         </div>
         <button
           onClick={() => navigate('/rooms')}

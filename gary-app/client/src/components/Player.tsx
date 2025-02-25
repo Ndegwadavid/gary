@@ -1,19 +1,25 @@
+// src/components/Player.tsx
 import { useEffect, useState, useRef } from 'react';
 import YouTube, { YouTubeProps, YouTubePlayer } from 'react-youtube';
 import io from 'socket.io-client';
 
-const socket = io('http://localhost:5000');
+const getSocketUrl = () => {
+  const host = window.location.hostname === 'localhost' ? 'localhost' : window.location.hostname;
+  return `http://${host}:5000`; // Update to deployed URL in production
+};
+
+const socket = io(getSocketUrl(), { transports: ['websocket', 'polling'] });
 
 interface PlayerProps {
   videoId?: string;
   audioUrl?: string;
-  roomId?: string;
-  isHost?: boolean;
+  roomId?: string; // Made optional
+  isHost?: boolean; // Made optional
 }
 
 const Player: React.FC<PlayerProps> = ({ videoId, audioUrl, roomId, isHost = false }) => {
   const [player, setPlayer] = useState<YouTubePlayer | null>(null);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const audioRef = useRef<HTMLAudioElement>(null);
 
   const opts: YouTubeProps['opts'] = {
     height: '200',
@@ -22,7 +28,7 @@ const Player: React.FC<PlayerProps> = ({ videoId, audioUrl, roomId, isHost = fal
   };
 
   useEffect(() => {
-    if (!roomId) return;
+    if (!roomId) return; // Skip sync logic if not in a room
 
     socket.on('play', (timestamp: number) => {
       if (!isHost) {
@@ -56,21 +62,15 @@ const Player: React.FC<PlayerProps> = ({ videoId, audioUrl, roomId, isHost = fal
 
   const onPlay = () => {
     if (isHost && roomId) {
-      if (player) socket.emit('play', { roomId, timestamp: player.getCurrentTime() });
-      if (audioRef.current) {
-        audioRef.current.play();
-        socket.emit('play', { roomId, timestamp: audioRef.current.currentTime });
-      }
+      const timestamp = player ? player.getCurrentTime() : audioRef.current?.currentTime || 0;
+      socket.emit('play', { roomId, timestamp });
     }
   };
 
   const onPause = () => {
     if (isHost && roomId) {
-      if (player) socket.emit('pause', { roomId, timestamp: player.getCurrentTime() });
-      if (audioRef.current) {
-        audioRef.current.pause();
-        socket.emit('pause', { roomId, timestamp: audioRef.current.currentTime });
-      }
+      const timestamp = player ? player.getCurrentTime() : audioRef.current?.currentTime || 0;
+      socket.emit('pause', { roomId, timestamp });
     }
   };
 

@@ -10,7 +10,7 @@ import io from 'socket.io-client';
 
 const getSocketUrl = () => {
   const host = window.location.hostname === 'localhost' ? 'localhost' : window.location.hostname;
-  return `http://${host}:5000`; // Adjust port if needed for production
+  return `http://${host}:5000`;
 };
 
 const socket = io(getSocketUrl(), { transports: ['websocket', 'polling'] });
@@ -44,6 +44,7 @@ const Room: React.FC<RoomProps> = ({ user }) => {
   const [peerConnection, setPeerConnection] = useState<RTCPeerConnection | null>(null);
   const [videoChatActive, setVideoChatActive] = useState(false);
   const [incomingCall, setIncomingCall] = useState<{ from: string; offer: RTCSessionDescriptionInit } | null>(null);
+  const [callStatus, setCallStatus] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Track[]>([]);
   const localVideoRef = useRef<HTMLVideoElement>(null);
@@ -59,21 +60,19 @@ const Room: React.FC<RoomProps> = ({ user }) => {
     socket.on('user-joined', ({ userId, userName }: { userId: string; userName: string }) => {
       if (!isHost) setIsHost(userId === socket.id);
       setOnlineUsers((prev) => {
-        const updated = prev.filter((u) => u.name !== userName); // Remove existing entry
+        const updated = prev.filter((u) => u.name !== userName);
         return [...updated, { id: userId, name: userName }];
       });
-    });
-  
-    socket.on('user-list', (users: { [key: string]: { roomId?: string; userName?: string } }) => {
-      const roomUsers = Object.entries(users)
-        .filter(([_, data]) => data.roomId === id)
-        .map(([userId, data]) => ({ id: userId, name: data.userName || 'Guest' }));
-      const uniqueUsers = Array.from(new Map(roomUsers.map((u) => [u.name, u])).values()); // Deduplicate by name
-      setOnlineUsers(uniqueUsers);
     });
     socket.on('track-changed', (track: Track) => {
       setCurrentTrack(track);
       setDoc(doc(db, 'rooms', id), { currentTrack: track }, { merge: true });
+    });
+    socket.on('play', (timestamp: number) => {
+      setCurrentTrack((prev) => ({ ...prev }));
+    });
+    socket.on('pause', (timestamp: number) => {
+      setCurrentTrack((prev) => ({ ...prev }));
     });
     socket.on('chat-message', (message: Message) => {
       setMessages((prev) => {
@@ -83,17 +82,33 @@ const Room: React.FC<RoomProps> = ({ user }) => {
         return prev;
       });
     });
+    socket.on('user-list', (users: { [key: string]: { roomId?: string; userName?: string } }) => {
+      const roomUsers = Object.entries(users)
+        .filter(([_, data]) => data.roomId === id)
+        .map(([userId, data]) => ({ id: userId, name: data.userName || 'Guest' }));
+      const uniqueUsers = Array.from(new Map(roomUsers.map((u) => [u.name, u])).values());
+      setOnlineUsers(uniqueUsers);
+    });
 
     socket.on('offer', (data: { from: string; offer: RTCSessionDescriptionInit }) => {
       setIncomingCall(data);
     });
 
     socket.on('answer', (answer: RTCSessionDescriptionInit) => {
-      if (peerConnection) peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
+      if (peerConnection) {
+        peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
+        setVideoChatActive(true);
+      }
     });
 
     socket.on('ice-candidate', (candidate: RTCIceCandidateInit) => {
       if (peerConnection) peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+    });
+
+    socket.on('call-ignored', (from: string) => {
+      setCallStatus(`${from} declined your video call`);
+      setVideoChatActive(false);
+      setPeerConnection(null);
     });
 
     const unsubscribe = onSnapshot(doc(db, 'rooms', id), (docSnap) => {
@@ -107,11 +122,14 @@ const Room: React.FC<RoomProps> = ({ user }) => {
     return () => {
       socket.off('user-joined');
       socket.off('track-changed');
+      socket.off('play');
+      socket.off('pause');
       socket.off('chat-message');
       socket.off('user-list');
       socket.off('offer');
       socket.off('answer');
       socket.off('ice-candidate');
+      socket.off('call-ignored');
       unsubscribe();
       if (peerConnection) peerConnection.close();
     };
@@ -152,26 +170,35 @@ const Room: React.FC<RoomProps> = ({ user }) => {
       setVideoChatActive(true);
     } catch (err) {
       console.error('Error starting video chat:', err);
+      setVideoChatActive(false);
     }
   };
 
   const acceptCall = async () => {
     if (!peerConnection || !incomingCall || !id || !user) return;
 
-    await peerConnection.setRemoteDescription(new RTCSessionDescription(incomingCall.offer));
-    const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-    if (localVideoRef.current) localVideoRef.current.srcObject = stream;
-    stream.getTracks().forEach((track) => peerConnection.addTrack(track, stream));
+    try {
+      await peerConnection.setRemoteDescription(new RTCSessionDescription(incomingCall.offer));
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      if (localVideoRef.current) localVideoRef.current.srcObject = stream;
+      stream.getTracks().forEach((track) => peerConnection.addTrack(track, stream));
 
-    const answer = await peerConnection.createAnswer();
-    await peerConnection.setLocalDescription(answer);
-    socket.emit('answer', { roomId: id, answer });
+      const answer = await peerConnection.createAnswer();
+      await peerConnection.setLocalDescription(answer);
+      socket.emit('answer', { roomId: id, answer });
 
-    setVideoChatActive(true);
-    setIncomingCall(null);
+      setVideoChatActive(true);
+      setIncomingCall(null);
+    } catch (err) {
+      console.error('Error accepting call:', err);
+      setVideoChatActive(false);
+    }
   };
 
   const ignoreCall = () => {
+    if (incomingCall && id) {
+      socket.emit('call-ignored', { roomId: id, from: incomingCall.from });
+    }
     setIncomingCall(null);
   };
 
@@ -213,15 +240,27 @@ const Room: React.FC<RoomProps> = ({ user }) => {
     if (!searchQuery.trim()) return;
 
     try {
-      const response = await fetch(
+      // YouTube search
+      const youtubeResponse = await fetch(
         `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=5&q=${encodeURIComponent(searchQuery)}&key=${process.env.REACT_APP_YOUTUBE_API_KEY}`
       );
-      const data = await response.json();
-      const results = data.items.map((item: any) => ({
+      const youtubeData = await youtubeResponse.json();
+      const youtubeResults = youtubeData.items.map((item: any) => ({
         videoId: item.id.videoId,
         title: item.snippet.title,
       }));
-      setSearchResults(results);
+
+      // Jamendo search
+      const jamendoResponse = await fetch(
+        `https://api.jamendo.com/v3.0/tracks/?client_id=${process.env.REACT_APP_JAMENDO_CLIENT_ID}&format=json&limit=5&search=${encodeURIComponent(searchQuery)}`
+      );
+      const jamendoData = await jamendoResponse.json();
+      const jamendoResults = jamendoData.results.map((track: any) => ({
+        audioUrl: track.audio,
+        title: track.name,
+      }));
+
+      setSearchResults([...youtubeResults, ...jamendoResults]);
     } catch (err) {
       console.error('Search failed:', err);
     }
@@ -245,6 +284,9 @@ const Room: React.FC<RoomProps> = ({ user }) => {
       <div className="mt-4 text-center">
         <p>Online Users: {onlineUsers.length} {onlineUsers.map((u) => u.name).join(', ')}</p>
       </div>
+      {callStatus && (
+        <div className="mt-4 text-center text-red-500">{callStatus}</div>
+      )}
       <div className="mt-8 flex flex-col items-center gap-4">
         {videoChatActive ? (
           <div className="flex justify-center gap-4">
@@ -311,7 +353,7 @@ const Room: React.FC<RoomProps> = ({ user }) => {
           {searchResults.map((result, index) => (
             <button
               key={index}
-              onClick={() => changeTrack({ videoId: result.videoId })}
+              onClick={() => changeTrack({ videoId: result.videoId, audioUrl: result.audioUrl })}
               className="bg-blue-500 text-white p-2 rounded hover:bg-blue-600 transition"
             >
               {result.title}

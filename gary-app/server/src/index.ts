@@ -10,7 +10,7 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: '*', // Allow all origins for testing—restrict in production
+    origin: '*',
     methods: ['GET', 'POST'],
   },
 });
@@ -73,8 +73,8 @@ io.on('connection', (socket: Socket) => {
     io.to(roomId).emit('chat-message', message);
   });
 
-  socket.on('offer', ({ roomId, offer }: { roomId: string; offer: RTCSessionDescriptionInit }) => {
-    socket.to(roomId).emit('offer', offer);
+  socket.on('offer', ({ roomId, offer, from }: { roomId: string; offer: RTCSessionDescriptionInit; from: string }) => {
+    socket.to(roomId).emit('offer', { from, offer });
   });
 
   socket.on('answer', ({ roomId, answer }: { roomId: string; answer: RTCSessionDescriptionInit }) => {
@@ -83,6 +83,10 @@ io.on('connection', (socket: Socket) => {
 
   socket.on('ice-candidate', ({ roomId, candidate }: { roomId: string; candidate: RTCIceCandidateInit }) => {
     socket.to(roomId).emit('ice-candidate', candidate);
+  });
+
+  socket.on('call-ignored', ({ roomId, from }: { roomId: string; from: string }) => {
+    socket.to(roomId).emit('call-ignored', from);
   });
 
   socket.on('disconnect', () => {
