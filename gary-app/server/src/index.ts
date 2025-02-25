@@ -9,7 +9,7 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: 'http://localhost:3000', // Allow client to connect
+    origin: 'http://localhost:3000',
     methods: ['GET', 'POST'],
   },
 });
@@ -19,9 +19,15 @@ interface SyncData {
   timestamp: number;
 }
 
+interface TrackData {
+  roomId: string;
+  videoId?: string;
+  audioUrl?: string;
+}
+
 interface ChatMessage {
   roomId: string;
-  message: string;
+  message: { userId: string; text: string };
 }
 
 const onlineUsers: { [key: string]: { roomId?: string; track?: string } } = {};
@@ -48,8 +54,12 @@ io.on('connection', (socket: Socket) => {
     io.emit('user-list', onlineUsers);
   });
 
+  socket.on('track-changed', ({ roomId, videoId, audioUrl }: TrackData) => {
+    socket.to(roomId).emit('track-changed', { videoId, audioUrl });
+  });
+
   socket.on('chat-message', ({ roomId, message }: ChatMessage) => {
-    io.to(roomId).emit('chat-message', { user: socket.id, message });
+    io.to(roomId).emit('chat-message', message);
   });
 
   socket.on('disconnect', () => {
