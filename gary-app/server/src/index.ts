@@ -10,7 +10,7 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: '*',
+    origin: '*', // Allow all origins for testing—restrict in production
     methods: ['GET', 'POST'],
   },
 });
@@ -22,8 +22,8 @@ interface SyncData {
 
 interface TrackData {
   roomId: string;
-  videoId?: string;
   audioUrl?: string;
+  title?: string; // Added title for audio tracks
 }
 
 interface ChatMessage {
@@ -48,25 +48,41 @@ io.on('connection', (socket: Socket) => {
   console.log('User connected:', socket.id);
 
   socket.on('join-room', ({ roomId, userName }: JoinData) => {
-    socket.join(roomId);
+    // Ensure user is initialized in onlineUsers
     onlineUsers[socket.id] = { roomId, userName };
+    socket.join(roomId);
     socket.to(roomId).emit('user-joined', { userId: socket.id, userName });
     io.emit('user-list', onlineUsers);
   });
 
   socket.on('play', ({ roomId, timestamp }: SyncData) => {
-    socket.to(roomId).emit('play', timestamp);
+    // Ensure user exists before setting track
+    if (!onlineUsers[socket.id]) {
+      onlineUsers[socket.id] = { roomId }; // Fallback initialization
+    }
     onlineUsers[socket.id].track = 'Playing a track';
+    socket.to(roomId).emit('play', timestamp);
     io.emit('user-list', onlineUsers);
   });
 
   socket.on('pause', ({ roomId, timestamp }: SyncData) => {
+    if (onlineUsers[socket.id]) {
+      onlineUsers[socket.id].track = undefined; // Clear track on pause
+    }
     socket.to(roomId).emit('pause', timestamp);
     io.emit('user-list', onlineUsers);
   });
 
-  socket.on('track-changed', ({ roomId, videoId, audioUrl }: TrackData) => {
-    socket.to(roomId).emit('track-changed', { videoId, audioUrl });
+  socket.on('stop', ({ roomId }: { roomId: string }) => {
+    if (onlineUsers[socket.id]) {
+      onlineUsers[socket.id].track = undefined; // Clear track on stop
+    }
+    socket.to(roomId).emit('stop');
+    io.emit('user-list', onlineUsers);
+  });
+
+  socket.on('track-changed', ({ roomId, audioUrl, title }: TrackData) => {
+    socket.to(roomId).emit('track-changed', { audioUrl, title });
   });
 
   socket.on('chat-message', ({ roomId, message }: ChatMessage) => {

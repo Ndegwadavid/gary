@@ -7,8 +7,7 @@ import AuthComponent from '../components/Auth';
 interface Track {
   id: string;
   title: string;
-  videoId?: string;
-  audioUrl?: string;
+  audioUrl?: string; // Only audioUrl, no videoId
 }
 
 interface LandingProps {
@@ -21,32 +20,18 @@ const Landing: React.FC<LandingProps> = ({ user }) => {
 
   useEffect(() => {
     fetch(
-      `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&maxResults=5&playlistId=PL9tY0BWXOZFt1L3Xv4cOYJGLP2QfNx8nG&key=${process.env.REACT_APP_YOUTUBE_API_KEY}`
+      `https://api.jamendo.com/v3.0/tracks/?client_id=${process.env.REACT_APP_JAMENDO_CLIENT_ID}&format=json&limit=5&order=downloads_total`
     )
       .then((res) => res.json())
-      .then((youtubeData) => {
-        const youtubeTracks = youtubeData.items.map((item: any) => ({
-          id: item.snippet.resourceId.videoId,
-          title: item.snippet.title,
-          videoId: item.snippet.resourceId.videoId,
+      .then((jamendoData) => {
+        const jamendoTracks = jamendoData.results.map((track: any) => ({
+          id: track.id,
+          title: track.name,
+          audioUrl: track.audio,
         }));
-
-        fetch(
-          `https://api.jamendo.com/v3.0/tracks/?client_id=${process.env.REACT_APP_JAMENDO_CLIENT_ID}&format=json&limit=5&order=downloads_total`
-        )
-          .then((res) => res.json())
-          .then((jamendoData) => {
-            const jamendoTracks = jamendoData.results.map((track: any) => ({
-              id: track.id,
-              title: track.name,
-              audioUrl: track.audio,
-            }));
-
-            setTracks([...youtubeTracks, ...jamendoTracks]);
-          })
-          .catch((err) => console.error('Jamendo fetch failed:', err));
+        setTracks(jamendoTracks);
       })
-      .catch((err) => console.error('YouTube fetch failed:', err));
+      .catch((err) => console.error('Jamendo fetch failed:', err));
   }, []);
 
   const handleLoginClick = () => {
@@ -67,7 +52,7 @@ const Landing: React.FC<LandingProps> = ({ user }) => {
             key={track.id}
             className="bg-white bg-opacity-20 p-4 rounded-lg flex items-center hover:bg-opacity-30 transition"
           >
-            <Player videoId={track.videoId} audioUrl={track.audioUrl} />
+            <Player audioUrl={track.audioUrl} /> {/* Only audioUrl */}
             <span className="ml-4">{track.title}</span>
           </div>
         ))}

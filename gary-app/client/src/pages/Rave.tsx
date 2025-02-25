@@ -27,7 +27,6 @@ interface Message {
 }
 
 interface Track {
-  videoId?: string;
   audioUrl?: string;
   title?: string;
 }
@@ -36,9 +35,9 @@ const Rave: React.FC<RaveProps> = ({ user }) => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [isHost, setIsHost] = useState(false);
-  const [currentTrack, setCurrentTrack] = useState<Track>({}); // No default track
+  const [currentTrack, setCurrentTrack] = useState<Track>({});
   const [messages, setMessages] = useState<Message[]>([]);
-  const [onlineUsers, setOnlineUsers] = useState<{ id: string; name: string }[]>([]);
+  const [onlineUsers, setOnlineUsers] = useState<{ id: string; name: string }[]>([]); // Restored
   const [peerConnection, setPeerConnection] = useState<RTCPeerConnection | null>(null);
   const [videoChatActive, setVideoChatActive] = useState(false);
   const [incomingCall, setIncomingCall] = useState<{ from: string; offer: RTCSessionDescriptionInit } | null>(null);
@@ -245,15 +244,6 @@ const Rave: React.FC<RaveProps> = ({ user }) => {
     if (!searchQuery.trim()) return;
 
     try {
-      const youtubeResponse = await fetch(
-        `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=5&q=${encodeURIComponent(searchQuery)}&key=${process.env.REACT_APP_YOUTUBE_API_KEY}`
-      );
-      const youtubeData = await youtubeResponse.json();
-      const youtubeResults = youtubeData.items.map((item: any) => ({
-        videoId: item.id.videoId,
-        title: item.snippet.title,
-      }));
-
       const jamendoResponse = await fetch(
         `https://api.jamendo.com/v3.0/tracks/?client_id=${process.env.REACT_APP_JAMENDO_CLIENT_ID}&format=json&limit=5&search=${encodeURIComponent(searchQuery)}`
       );
@@ -263,7 +253,7 @@ const Rave: React.FC<RaveProps> = ({ user }) => {
         title: track.name,
       }));
 
-      setSearchResults([...youtubeResults, ...jamendoResults]);
+      setSearchResults(jamendoResults);
     } catch (err) {
       console.error('Search failed:', err);
     }
@@ -285,7 +275,7 @@ const Rave: React.FC<RaveProps> = ({ user }) => {
         </button>
       </div>
       <div className="mt-4 text-center">
-        <p>Online Users: {onlineUsers.length} {onlineUsers.map((u) => u.name).join(', ')}</p>
+        <p>Online Users: {onlineUsers.length} {onlineUsers.map((u) => u.name).join(', ')}</p> {/* Restored */}
       </div>
       {callStatus && (
         <div className="mt-4 text-center text-red-500">{callStatus}</div>
@@ -330,7 +320,6 @@ const Rave: React.FC<RaveProps> = ({ user }) => {
           </div>
         )}
         <Player
-          videoId={currentTrack.videoId}
           audioUrl={currentTrack.audioUrl}
           roomId={`rave-${id}`}
         />
@@ -340,7 +329,7 @@ const Rave: React.FC<RaveProps> = ({ user }) => {
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search for a song..."
+              placeholder="Search for an audio track..."
               className="flex-1 p-2 rounded text-black focus:outline-none focus:ring-2 focus:ring-purple-600"
             />
             <button
@@ -353,14 +342,14 @@ const Rave: React.FC<RaveProps> = ({ user }) => {
           {searchResults.map((result, index) => (
             <button
               key={index}
-              onClick={() => changeTrack({ videoId: result.videoId, audioUrl: result.audioUrl })}
+              onClick={() => changeTrack({ audioUrl: result.audioUrl, title: result.title })}
               className="bg-blue-500 text-white p-2 rounded hover:bg-blue-600 transition"
             >
               {result.title}
             </button>
           ))}
           <button
-            onClick={() => changeTrack({ audioUrl: 'https://prod-1.storage.jamendo.com/?trackid=143356&format=mp31' })}
+            onClick={() => changeTrack({ audioUrl: 'https://prod-1.storage.jamendo.com/?trackid=143356&format=mp31', title: 'Sample Jamendo Track' })}
             className="bg-blue-600 text-white p-2 rounded hover:bg-blue-700 transition"
           >
             Play Sample Jamendo Track
