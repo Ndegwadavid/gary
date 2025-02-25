@@ -1,5 +1,4 @@
-// src/components/Chat.tsx
-import { useState } from 'react'; // Added import
+import { useState } from 'react'; 
 
 interface Message {
   userId: string;
