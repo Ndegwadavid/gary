@@ -1,4 +1,3 @@
-// src/pages/Landing.tsx
 import { useEffect, useState } from 'react';
 import { User } from 'firebase/auth';
 import Player from '../components/Player';

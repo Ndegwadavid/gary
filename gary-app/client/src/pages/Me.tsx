@@ -1,4 +1,3 @@
-// src/pages/Me.tsx
 import { useNavigate } from 'react-router-dom';
 import { User } from 'firebase/auth';
 import { auth } from '../firebase'; // Use named import from firebase.ts

@@ -1,4 +1,3 @@
-// src/pages/Rooms.tsx
 import { useNavigate } from 'react-router-dom';
 import { User } from 'firebase/auth';
 
