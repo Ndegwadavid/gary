@@ -10,7 +10,7 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: 'http://localhost:3000',
+    origin: '*', // Allow all origins for testing—restrict in production
     methods: ['GET', 'POST'],
   },
 });
@@ -36,7 +36,6 @@ interface JoinData {
   userName: string;
 }
 
-// Updated interface to include track
 interface UserData {
   roomId?: string;
   userName?: string;
@@ -96,4 +95,4 @@ io.on('connection', (socket: Socket) => {
 });
 
 const PORT = process.env.PORT || 5000;
-server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+server.listen({ port: PORT, host: '0.0.0.0' }, () => console.log(`Server running on port ${PORT}`));

@@ -11,6 +11,7 @@ interface MeProps {
 const Me: React.FC<MeProps> = ({ user }) => {
   const navigate = useNavigate();
   const [roomIdInput, setRoomIdInput] = useState('');
+  const [raveIdInput, setRaveIdInput] = useState('');
 
   if (!user) {
     navigate('/');
@@ -25,6 +26,14 @@ const Me: React.FC<MeProps> = ({ user }) => {
   const joinRoom = () => {
     if (roomIdInput.trim()) {
       navigate(`/room/${roomIdInput.trim()}`);
+    }
+  };
+
+  const createOrJoinRave = () => {
+    if (raveIdInput.trim() && /^[a-zA-Z0-9]+$/.test(raveIdInput.trim())) {
+      navigate(`/rave/${raveIdInput.trim()}`);
+    } else {
+      alert('Rave ID must contain only letters and numbers.');
     }
   };
 
@@ -53,6 +62,21 @@ const Me: React.FC<MeProps> = ({ user }) => {
             className="bg-green-600 text-white p-3 rounded-full hover:bg-green-700 transition"
           >
             Join Room
+          </button>
+        </div>
+        <div className="flex flex-col gap-2">
+          <input
+            type="text"
+            value={raveIdInput}
+            onChange={(e) => setRaveIdInput(e.target.value)}
+            placeholder="Enter Rave ID (letters/numbers only)"
+            className="p-2 border rounded text-black focus:outline-none focus:ring-2 focus:ring-purple-600"
+          />
+          <button
+            onClick={createOrJoinRave}
+            className="bg-orange-600 text-white p-3 rounded-full hover:bg-orange-700 transition"
+          >
+            Create/Join Rave
           </button>
         </div>
         <button

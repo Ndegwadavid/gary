@@ -1,4 +1,4 @@
-// src/pages/Room.tsx
+// src/pages/Rave.tsx
 import { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { User } from 'firebase/auth';
@@ -10,12 +10,12 @@ import io from 'socket.io-client';
 
 const getSocketUrl = () => {
   const host = window.location.hostname === 'localhost' ? 'localhost' : window.location.hostname;
-  return `http://${host}:5000`; // Adjust port if needed for production
+  return `http://${host}:5000`;
 };
 
 const socket = io(getSocketUrl(), { transports: ['websocket', 'polling'] });
 
-interface RoomProps {
+interface RaveProps {
   user: User | null;
 }
 
@@ -32,7 +32,7 @@ interface Track {
   title?: string;
 }
 
-const Room: React.FC<RoomProps> = ({ user }) => {
+const Rave: React.FC<RaveProps> = ({ user }) => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [isHost, setIsHost] = useState(false);
@@ -50,30 +50,30 @@ const Room: React.FC<RoomProps> = ({ user }) => {
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
-    if (!user || !id) {
+    if (!user || !id || !/^[a-zA-Z0-9]+$/.test(id)) {
       navigate('/');
       return;
     }
 
-    socket.emit('join-room', { roomId: id, userName: user.email || 'Guest' });
+    socket.emit('join-room', { roomId: `rave-${id}`, userName: user.email || 'Guest' });
     socket.on('user-joined', ({ userId, userName }: { userId: string; userName: string }) => {
-      if (!isHost) setIsHost(userId === socket.id);
-      setOnlineUsers((prev) => {
-        const updated = prev.filter((u) => u.name !== userName); // Remove existing entry
-        return [...updated, { id: userId, name: userName }];
+        if (!isHost) setIsHost(userId === socket.id);
+        setOnlineUsers((prev) => {
+          const updated = prev.filter((u) => u.name !== userName); // Remove existing entry
+          return [...updated, { id: userId, name: userName }];
+        });
       });
-    });
-  
-    socket.on('user-list', (users: { [key: string]: { roomId?: string; userName?: string } }) => {
-      const roomUsers = Object.entries(users)
-        .filter(([_, data]) => data.roomId === id)
-        .map(([userId, data]) => ({ id: userId, name: data.userName || 'Guest' }));
-      const uniqueUsers = Array.from(new Map(roomUsers.map((u) => [u.name, u])).values()); // Deduplicate by name
-      setOnlineUsers(uniqueUsers);
-    });
+    
+      socket.on('user-list', (users: { [key: string]: { roomId?: string; userName?: string } }) => {
+        const roomUsers = Object.entries(users)
+          .filter(([_, data]) => data.roomId === `rave-${id}`)
+          .map(([userId, data]) => ({ id: userId, name: data.userName || 'Guest' }));
+        const uniqueUsers = Array.from(new Map(roomUsers.map((u) => [u.name, u])).values()); // Deduplicate by name
+        setOnlineUsers(uniqueUsers);
+      });
     socket.on('track-changed', (track: Track) => {
       setCurrentTrack(track);
-      setDoc(doc(db, 'rooms', id), { currentTrack: track }, { merge: true });
+      setDoc(doc(db, 'raves', id), { currentTrack: track }, { merge: true });
     });
     socket.on('chat-message', (message: Message) => {
       setMessages((prev) => {
@@ -83,7 +83,6 @@ const Room: React.FC<RoomProps> = ({ user }) => {
         return prev;
       });
     });
-
     socket.on('offer', (data: { from: string; offer: RTCSessionDescriptionInit }) => {
       setIncomingCall(data);
     });
@@ -96,7 +95,7 @@ const Room: React.FC<RoomProps> = ({ user }) => {
       if (peerConnection) peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
     });
 
-    const unsubscribe = onSnapshot(doc(db, 'rooms', id), (docSnap) => {
+    const unsubscribe = onSnapshot(doc(db, 'raves', id), (docSnap) => {
       if (docSnap.exists()) {
         const data = docSnap.data();
         if (data.currentTrack) setCurrentTrack(data.currentTrack);
@@ -141,13 +140,13 @@ const Room: React.FC<RoomProps> = ({ user }) => {
 
       pc.onicecandidate = (event) => {
         if (event.candidate && id) {
-          socket.emit('ice-candidate', { roomId: id, candidate: event.candidate });
+          socket.emit('ice-candidate', { roomId: `rave-${id}`, candidate: event.candidate });
         }
       };
 
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
-      socket.emit('offer', { roomId: id, from: user.email || 'Guest', offer });
+      socket.emit('offer', { roomId: `rave-${id}`, from: user.email || 'Guest', offer });
 
       setVideoChatActive(true);
     } catch (err) {
@@ -165,7 +164,7 @@ const Room: React.FC<RoomProps> = ({ user }) => {
 
     const answer = await peerConnection.createAnswer();
     await peerConnection.setLocalDescription(answer);
-    socket.emit('answer', { roomId: id, answer });
+    socket.emit('answer', { roomId: `rave-${id}`, answer });
 
     setVideoChatActive(true);
     setIncomingCall(null);
@@ -178,8 +177,8 @@ const Room: React.FC<RoomProps> = ({ user }) => {
   const changeTrack = (track: Track) => {
     if (isHost && id) {
       setCurrentTrack(track);
-      socket.emit('track-changed', { roomId: id, ...track });
-      setDoc(doc(db, 'rooms', id), { currentTrack: track }, { merge: true });
+      socket.emit('track-changed', { roomId: `rave-${id}`, ...track });
+      setDoc(doc(db, 'raves', id), { currentTrack: track }, { merge: true });
     }
   };
 
@@ -191,21 +190,21 @@ const Room: React.FC<RoomProps> = ({ user }) => {
         text,
         timestamp: Date.now(),
       };
-      socket.emit('chat-message', { roomId: id, message });
+      socket.emit('chat-message', { roomId: `rave-${id}`, message });
       setMessages((prev) => {
         if (!prev.some((m) => m.timestamp === message.timestamp && m.text === message.text)) {
           return [...prev, message];
         }
         return prev;
       });
-      setDoc(doc(db, 'rooms', id), { messages: [...messages, message] }, { merge: true });
+      setDoc(doc(db, 'raves', id), { messages: [...messages, message] }, { merge: true });
     }
   };
 
   const copyRoomId = () => {
     if (id) {
-      navigator.clipboard.writeText(`${window.location.origin}/room/${id}`);
-      alert('Room ID copied to clipboard!');
+      navigator.clipboard.writeText(`${window.location.origin}/rave/${id}`);
+      alert('Rave Room ID copied to clipboard!');
     }
   };
 
@@ -228,18 +227,18 @@ const Room: React.FC<RoomProps> = ({ user }) => {
   };
 
   if (!user || !id) {
-    return <div className="p-6 text-center">Please login to join a room.</div>;
+    return <div className="p-6 text-center">Please login to join a rave.</div>;
   }
 
   return (
     <div className="p-6">
-      <h1 className="text-2xl font-bold mt-4 text-center">Room: {id}</h1>
+      <h1 className="text-2xl font-bold mt-4 text-center">Rave: {id}</h1>
       <div className="mt-4 text-center">
         <button
           onClick={copyRoomId}
           className="bg-gray-500 text-white p-2 rounded hover:bg-gray-600 transition"
         >
-          Copy Room ID
+          Copy Rave ID
         </button>
       </div>
       <div className="mt-4 text-center">
@@ -287,7 +286,7 @@ const Room: React.FC<RoomProps> = ({ user }) => {
         <Player
           videoId={currentTrack.videoId}
           audioUrl={currentTrack.audioUrl}
-          roomId={id}
+          roomId={`rave-${id}`}
           isHost={isHost}
         />
       </div>
@@ -332,7 +331,7 @@ const Room: React.FC<RoomProps> = ({ user }) => {
         </div>
       )}
       <Chat
-        roomId={id}
+        roomId={`rave-${id}`}
         userId={socket.id || ''}
         messages={messages}
         sendMessage={sendMessage}
@@ -341,10 +340,10 @@ const Room: React.FC<RoomProps> = ({ user }) => {
         onClick={() => navigate('/me')}
         className="mt-8 w-full max-w-md mx-auto bg-gray-600 text-white p-3 rounded-full hover:bg-gray-700 transition"
       >
-        Leave Room
+        Leave Rave
       </button>
     </div>
   );
 };
 
-export default Room;
+export default Rave;

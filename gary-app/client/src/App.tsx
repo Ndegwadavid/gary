@@ -8,6 +8,7 @@ import Landing from './pages/Landing';
 import Room from './pages/Room';
 import Me from './pages/Me';
 import Rooms from './pages/Rooms';
+import Rave from './pages/Rave';
 
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
@@ -35,6 +36,7 @@ const App: React.FC = () => {
             <Route path="/me" element={<Me user={user} />} />
             <Route path="/rooms" element={<Rooms user={user} />} />
             <Route path="/room/:id" element={<Room user={user} />} />
+            <Route path="/rave/:id" element={<Rave user={user} />} />
           </Routes>
         </div>
       </div>
