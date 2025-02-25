@@ -1,3 +1,4 @@
+// src/components/Auth.tsx
 import { useState } from 'react';
 import {
   signInWithEmailAndPassword,
@@ -14,25 +15,30 @@ const Auth: React.FC<AuthProps> = ({ onClose }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isSignUp, setIsSignUp] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleEmailAuth = async () => {
     try {
+      setError(null);
       if (isSignUp) {
         await createUserWithEmailAndPassword(auth, email, password);
       } else {
         await signInWithEmailAndPassword(auth, email, password);
       }
       onClose();
-    } catch (error) {
+    } catch (error: any) {
+      setError(error.message);
       console.error(`${isSignUp ? 'Signup' : 'Login'} failed:`, error);
     }
   };
 
   const handleGoogleAuth = async () => {
     try {
+      setError(null);
       await signInWithPopup(auth, googleProvider);
       onClose();
-    } catch (error) {
+    } catch (error: any) {
+      setError(error.message);
       console.error('Google auth failed:', error);
     }
   };
@@ -43,6 +49,7 @@ const Auth: React.FC<AuthProps> = ({ onClose }) => {
         <h2 className="text-2xl font-bold mb-4">
           {isSignUp ? 'Sign Up for Gary' : 'Login to Gary'}
         </h2>
+        {error && <p className="text-red-500 mb-4">{error}</p>}
         <input
           type="email"
           value={email}

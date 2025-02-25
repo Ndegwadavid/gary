@@ -1,3 +1,4 @@
+// src/pages/Landing.tsx
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { auth } from '../firebase';
@@ -7,6 +8,8 @@ import AuthComponent from '../components/Auth';
 interface Track {
   id: string;
   title: string;
+  videoId?: string; // YouTube
+  audioUrl?: string; // Jamendo
 }
 
 const Landing: React.FC = () => {
@@ -16,18 +19,33 @@ const Landing: React.FC = () => {
   const user = auth.currentUser;
 
   useEffect(() => {
+    // Fetch YouTube tracks
     fetch(
       `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&maxResults=5&playlistId=PL9tY0BWXOZFt1L3Xv4cOYJGLP2QfNx8nG&key=${process.env.REACT_APP_YOUTUBE_API_KEY}`
     )
       .then((res) => res.json())
-      .then((data) =>
-        setTracks(
-          data.items.map((item: any) => ({
-            id: item.snippet.resourceId.videoId,
-            title: item.snippet.title,
-          }))
+      .then((youtubeData) => {
+        const youtubeTracks = youtubeData.items.map((item: any) => ({
+          id: item.snippet.resourceId.videoId,
+          title: item.snippet.title,
+          videoId: item.snippet.resourceId.videoId,
+        }));
+
+        // Fetch Jamendo tracks
+        fetch(
+          `https://api.jamendo.com/v3.0/tracks/?client_id=${process.env.REACT_APP_JAMENDO_CLIENT_ID}&format=json&limit=5&order=downloads_total`
         )
-      );
+          .then((res) => res.json())
+          .then((jamendoData) => {
+            const jamendoTracks = jamendoData.results.map((track: any) => ({
+              id: track.id,
+              title: track.name,
+              audioUrl: track.audio,
+            }));
+
+            setTracks([...youtubeTracks, ...jamendoTracks]);
+          });
+      });
   }, []);
 
   const createRoom = () => {
@@ -50,7 +68,7 @@ const Landing: React.FC = () => {
             key={track.id}
             className="bg-white bg-opacity-20 p-4 rounded-lg flex items-center hover:bg-opacity-30 transition"
           >
-            <Player videoId={track.id} />
+            <Player videoId={track.videoId} audioUrl={track.audioUrl} />
             <span className="ml-4">{track.title}</span>
           </div>
         ))}
