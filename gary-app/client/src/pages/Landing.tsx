@@ -1,25 +1,27 @@
 // src/pages/Landing.tsx
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { auth } from '../firebase';
+import { User } from 'firebase/auth';
 import Player from '../components/Player';
 import AuthComponent from '../components/Auth';
+import { auth } from '../firebase';
+import { onAuthStateChanged } from 'firebase/auth';
 
 interface Track {
   id: string;
   title: string;
-  videoId?: string; // YouTube
-  audioUrl?: string; // Jamendo
+  videoId?: string;
+  audioUrl?: string;
 }
 
-const Landing: React.FC = () => {
+interface LandingProps {
+  user: User | null;
+}
+
+const Landing: React.FC<LandingProps> = ({ user }) => {
   const [tracks, setTracks] = useState<Track[]>([]);
   const [showAuth, setShowAuth] = useState(false);
-  const navigate = useNavigate();
-  const user = auth.currentUser;
 
   useEffect(() => {
-    // Fetch YouTube tracks
     fetch(
       `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&maxResults=5&playlistId=PL9tY0BWXOZFt1L3Xv4cOYJGLP2QfNx8nG&key=${process.env.REACT_APP_YOUTUBE_API_KEY}`
     )
@@ -31,7 +33,6 @@ const Landing: React.FC = () => {
           videoId: item.snippet.resourceId.videoId,
         }));
 
-        // Fetch Jamendo tracks
         fetch(
           `https://api.jamendo.com/v3.0/tracks/?client_id=${process.env.REACT_APP_JAMENDO_CLIENT_ID}&format=json&limit=5&order=downloads_total`
         )
@@ -44,17 +45,14 @@ const Landing: React.FC = () => {
             }));
 
             setTracks([...youtubeTracks, ...jamendoTracks]);
-          });
-      });
+          })
+          .catch((err) => console.error('Jamendo fetch failed:', err));
+      })
+      .catch((err) => console.error('YouTube fetch failed:', err));
   }, []);
 
-  const createRoom = () => {
-    if (!user) {
-      setShowAuth(true);
-    } else {
-      const roomId = Math.random().toString(36).substring(7);
-      navigate(`/room/${roomId}`);
-    }
+  const handleLoginClick = () => {
+    setShowAuth(true);
   };
 
   return (
@@ -62,6 +60,9 @@ const Landing: React.FC = () => {
       <h1 className="text-4xl font-bold mt-8 text-center">
         Share the Beat, Feel the Moment
       </h1>
+      <p className="text-center mt-2 text-lg">
+        Listen to music below or login to create and join rooms!
+      </p>
       <div className="mt-8 grid gap-4">
         {tracks.map((track) => (
           <div
@@ -73,12 +74,14 @@ const Landing: React.FC = () => {
           </div>
         ))}
       </div>
-      <button
-        onClick={createRoom}
-        className="mt-8 w-full bg-purple-600 text-white p-3 rounded-full hover:bg-purple-700 transition"
-      >
-        {user ? 'Create a Room' : 'Login to Create a Room'}
-      </button>
+      {!user && (
+        <button
+          onClick={handleLoginClick}
+          className="mt-8 w-full max-w-md mx-auto bg-purple-600 text-white p-3 rounded-full hover:bg-purple-700 transition"
+        >
+          Login / Sign Up
+        </button>
+      )}
       {showAuth && <AuthComponent onClose={() => setShowAuth(false)} />}
     </div>
   );

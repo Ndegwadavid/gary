@@ -1,4 +1,3 @@
-// src/components/Auth.tsx
 import { useState } from 'react';
 import {
   signInWithEmailAndPassword,
@@ -28,7 +27,7 @@ const Auth: React.FC<AuthProps> = ({ onClose }) => {
         await signInWithEmailAndPassword(auth, email, password);
       }
       onClose();
-      navigate('/me'); // Redirect to /me after success
+      navigate('/me');
     } catch (error: any) {
       setError(error.message);
       console.error(`${isSignUp ? 'Signup' : 'Login'} failed:`, error);
@@ -40,7 +39,7 @@ const Auth: React.FC<AuthProps> = ({ onClose }) => {
       setError(null);
       await signInWithPopup(auth, googleProvider);
       onClose();
-      navigate('/me'); // Redirect to /me after success
+      navigate('/me');
     } catch (error: any) {
       setError(error.message);
       console.error('Google auth failed:', error);

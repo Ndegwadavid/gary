@@ -1,17 +1,21 @@
 // src/components/Sidebar.tsx
 import { useNavigate } from 'react-router-dom';
+import { User } from 'firebase/auth';
 import { auth } from '../firebase';
 
-const Sidebar: React.FC = () => {
+interface SidebarProps {
+  user: User | null;
+}
+
+const Sidebar: React.FC<SidebarProps> = ({ user }) => {
   const navigate = useNavigate();
-  const user = auth.currentUser;
 
   const createRoom = () => {
     if (user) {
       const roomId = Math.random().toString(36).substring(7);
       navigate(`/room/${roomId}`);
     } else {
-      navigate('/'); // Redirect to landing for login
+      navigate('/');
     }
   };
 
@@ -31,33 +35,51 @@ const Sidebar: React.FC = () => {
               Home
             </button>
           </li>
-          <li className="mb-4">
-            <button
-              onClick={createRoom}
-              className="w-full text-left hover:bg-gray-700 p-2 rounded"
-            >
-              Create Room
-            </button>
-          </li>
-          {user ? (
-            <li>
+          {user && (
+            <>
+              <li className="mb-4">
+                <button
+                  onClick={() => navigate('/me')}
+                  className="w-full text-left hover:bg-gray-700 p-2 rounded"
+                >
+                  My Profile
+                </button>
+              </li>
+              <li className="mb-4">
+                <button
+                  onClick={createRoom}
+                  className="w-full text-left hover:bg-gray-700 p-2 rounded"
+                >
+                  Create Room
+                </button>
+              </li>
+              <li className="mb-4">
+                <button
+                  onClick={() => navigate('/rooms')}
+                  className="w-full text-left hover:bg-gray-700 p-2 rounded"
+                >
+                  View Rooms
+                </button>
+              </li>
+            </>
+          )}
+          <li>
+            {user ? (
               <button
                 onClick={() => auth.signOut()}
                 className="w-full text-left hover:bg-gray-700 p-2 rounded"
               >
                 Logout
               </button>
-            </li>
-          ) : (
-            <li>
+            ) : (
               <button
-                onClick={() => navigate('/')} // Trigger auth via Landing
+                onClick={() => navigate('/')}
                 className="w-full text-left hover:bg-gray-700 p-2 rounded"
               >
                 Login / Sign Up
               </button>
-            </li>
-          )}
+            )}
+          </li>
         </ul>
       </nav>
     </div>

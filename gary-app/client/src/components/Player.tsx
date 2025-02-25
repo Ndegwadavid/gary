@@ -1,4 +1,3 @@
-// src/components/Player.tsx
 import { useEffect, useState, useRef } from 'react';
 import YouTube, { YouTubeProps, YouTubePlayer } from 'react-youtube';
 import io from 'socket.io-client';
@@ -6,8 +5,8 @@ import io from 'socket.io-client';
 const socket = io('http://localhost:5000');
 
 interface PlayerProps {
-  videoId?: string; // For YouTube
-  audioUrl?: string; // For Jamendo
+  videoId?: string;
+  audioUrl?: string;
   roomId?: string;
   isHost?: boolean;
 }
