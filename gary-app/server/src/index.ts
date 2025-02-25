@@ -1,3 +1,4 @@
+// server/src/index.ts
 import express from 'express';
 import http from 'http';
 import { Server, Socket } from 'socket.io';
@@ -27,19 +28,30 @@ interface TrackData {
 
 interface ChatMessage {
   roomId: string;
-  message: { userId: string; text: string };
+  message: { userId: string; userName: string; text: string; timestamp: number };
 }
 
-const onlineUsers: { [key: string]: { roomId?: string; track?: string } } = {};
+interface JoinData {
+  roomId: string;
+  userName: string;
+}
+
+// Updated interface to include track
+interface UserData {
+  roomId?: string;
+  userName?: string;
+  track?: string;
+}
+
+const onlineUsers: { [key: string]: UserData } = {};
 
 io.on('connection', (socket: Socket) => {
   console.log('User connected:', socket.id);
-  onlineUsers[socket.id] = {};
 
-  socket.on('join-room', (roomId: string) => {
+  socket.on('join-room', ({ roomId, userName }: JoinData) => {
     socket.join(roomId);
-    onlineUsers[socket.id].roomId = roomId;
-    socket.to(roomId).emit('user-joined', socket.id);
+    onlineUsers[socket.id] = { roomId, userName };
+    socket.to(roomId).emit('user-joined', { userId: socket.id, userName });
     io.emit('user-list', onlineUsers);
   });
 
@@ -60,6 +72,18 @@ io.on('connection', (socket: Socket) => {
 
   socket.on('chat-message', ({ roomId, message }: ChatMessage) => {
     io.to(roomId).emit('chat-message', message);
+  });
+
+  socket.on('offer', ({ roomId, offer }: { roomId: string; offer: RTCSessionDescriptionInit }) => {
+    socket.to(roomId).emit('offer', offer);
+  });
+
+  socket.on('answer', ({ roomId, answer }: { roomId: string; answer: RTCSessionDescriptionInit }) => {
+    socket.to(roomId).emit('answer', answer);
+  });
+
+  socket.on('ice-candidate', ({ roomId, candidate }: { roomId: string; candidate: RTCIceCandidateInit }) => {
+    socket.to(roomId).emit('ice-candidate', candidate);
   });
 
   socket.on('disconnect', () => {

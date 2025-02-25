@@ -1,6 +1,8 @@
+// src/pages/Me.tsx
 import { useNavigate } from 'react-router-dom';
 import { User } from 'firebase/auth';
-import { auth } from '../firebase'; // Use named import from firebase.ts
+import { auth } from '../firebase';
+import { useState } from 'react';
 
 interface MeProps {
   user: User | null;
@@ -8,6 +10,7 @@ interface MeProps {
 
 const Me: React.FC<MeProps> = ({ user }) => {
   const navigate = useNavigate();
+  const [roomIdInput, setRoomIdInput] = useState('');
 
   if (!user) {
     navigate('/');
@@ -17,6 +20,12 @@ const Me: React.FC<MeProps> = ({ user }) => {
   const createRoom = () => {
     const roomId = Math.random().toString(36).substring(7);
     navigate(`/room/${roomId}`);
+  };
+
+  const joinRoom = () => {
+    if (roomIdInput.trim()) {
+      navigate(`/room/${roomIdInput.trim()}`);
+    }
   };
 
   return (
@@ -31,6 +40,21 @@ const Me: React.FC<MeProps> = ({ user }) => {
         >
           Create a Room
         </button>
+        <div className="flex flex-col gap-2">
+          <input
+            type="text"
+            value={roomIdInput}
+            onChange={(e) => setRoomIdInput(e.target.value)}
+            placeholder="Paste Room ID"
+            className="p-2 border rounded text-black focus:outline-none focus:ring-2 focus:ring-purple-600"
+          />
+          <button
+            onClick={joinRoom}
+            className="bg-green-600 text-white p-3 rounded-full hover:bg-green-700 transition"
+          >
+            Join Room
+          </button>
+        </div>
         <button
           onClick={() => navigate('/rooms')}
           className="bg-blue-600 text-white p-3 rounded-full hover:bg-blue-700 transition"

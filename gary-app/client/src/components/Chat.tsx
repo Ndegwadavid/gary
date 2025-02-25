@@ -1,7 +1,9 @@
-import { useState } from 'react'; 
+// src/components/Chat.tsx
+import { useState } from 'react';
 
 interface Message {
   userId: string;
+  userName: string;
   text: string;
   timestamp: number;
 }
@@ -28,7 +30,7 @@ const Chat: React.FC<ChatProps> = ({ roomId, userId, messages, sendMessage }) =>
       <div className="h-40 overflow-y-auto mb-2">
         {messages.map((msg, index) => (
           <p key={index} className="text-sm">
-            <span className="font-bold">{msg.userId.slice(0, 6)}:</span> {msg.text}
+            <span className="font-bold">{msg.userName}:</span> {msg.text}
           </p>
         ))}
       </div>
