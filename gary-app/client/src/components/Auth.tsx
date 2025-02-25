@@ -1,5 +1,9 @@
 import { useState } from 'react';
-import { signInWithEmailAndPassword, signInWithPopup } from 'firebase/auth';
+import {
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  signInWithPopup,
+} from 'firebase/auth';
 import { auth, googleProvider } from '../firebase';
 
 interface AuthProps {
@@ -9,56 +13,75 @@ interface AuthProps {
 const Auth: React.FC<AuthProps> = ({ onClose }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [isSignUp, setIsSignUp] = useState(false);
 
-  const handleEmailLogin = async () => {
+  const handleEmailAuth = async () => {
     try {
-      await signInWithEmailAndPassword(auth, email, password);
+      if (isSignUp) {
+        await createUserWithEmailAndPassword(auth, email, password);
+      } else {
+        await signInWithEmailAndPassword(auth, email, password);
+      }
       onClose();
     } catch (error) {
-      console.error('Login failed:', error);
+      console.error(`${isSignUp ? 'Signup' : 'Login'} failed:`, error);
     }
   };
 
-  const handleGoogleLogin = async () => {
+  const handleGoogleAuth = async () => {
     try {
       await signInWithPopup(auth, googleProvider);
       onClose();
     } catch (error) {
-      console.error('Google login failed:', error);
+      console.error('Google auth failed:', error);
     }
   };
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
-      <div className="bg-white p-6 rounded-lg text-black">
-        <h2 className="text-2xl font-bold mb-4">Login to Gary</h2>
+      <div className="bg-white p-6 rounded-lg text-black max-w-sm w-full">
+        <h2 className="text-2xl font-bold mb-4">
+          {isSignUp ? 'Sign Up for Gary' : 'Login to Gary'}
+        </h2>
         <input
           type="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           placeholder="Email"
-          className="w-full p-2 mb-4 border rounded"
+          className="w-full p-2 mb-4 border rounded focus:outline-none focus:ring-2 focus:ring-purple-600"
         />
         <input
           type="password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           placeholder="Password"
-          className="w-full p-2 mb-4 border rounded"
+          className="w-full p-2 mb-4 border rounded focus:outline-none focus:ring-2 focus:ring-purple-600"
         />
         <button
-          onClick={handleEmailLogin}
-          className="w-full bg-purple-600 text-white p-2 rounded hover:bg-purple-700"
+          onClick={handleEmailAuth}
+          className="w-full bg-purple-600 text-white p-2 rounded hover:bg-purple-700 transition"
         >
-          Login with Email
+          {isSignUp ? 'Sign Up' : 'Login'}
         </button>
         <button
-          onClick={handleGoogleLogin}
-          className="w-full bg-blue-600 text-white p-2 mt-2 rounded hover:bg-blue-700"
+          onClick={handleGoogleAuth}
+          className="w-full bg-blue-600 text-white p-2 mt-2 rounded hover:bg-blue-700 transition"
         >
-          Login with Google
+          {isSignUp ? 'Sign Up with Google' : 'Login with Google'}
         </button>
-        <button onClick={onClose} className="mt-4 text-gray-600">
+        <p className="mt-4 text-center text-sm">
+          {isSignUp ? 'Already have an account?' : 'Need an account?'}{' '}
+          <button
+            onClick={() => setIsSignUp(!isSignUp)}
+            className="text-purple-600 hover:underline"
+          >
+            {isSignUp ? 'Login' : 'Sign Up'}
+          </button>
+        </p>
+        <button
+          onClick={onClose}
+          className="mt-4 w-full text-gray-600 hover:text-gray-800"
+        >
           Close
         </button>
       </div>
