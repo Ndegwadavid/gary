@@ -14,10 +14,9 @@ interface PlayerProps {
   videoId?: string;
   audioUrl?: string;
   roomId?: string;
-  isHost?: boolean;
 }
 
-const Player: React.FC<PlayerProps> = ({ videoId, audioUrl, roomId, isHost = false }) => {
+const Player: React.FC<PlayerProps> = ({ videoId, audioUrl, roomId }) => {
   const [player, setPlayer] = useState<YouTubePlayer | null>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -32,44 +31,38 @@ const Player: React.FC<PlayerProps> = ({ videoId, audioUrl, roomId, isHost = fal
     if (!roomId) return;
 
     socket.on('play', (timestamp: number) => {
-      if (!isHost) {
-        if (player) {
-          player.seekTo(timestamp, true).playVideo();
-          setIsPlaying(true);
-        }
-        if (audioRef.current) {
-          audioRef.current.currentTime = timestamp;
-          audioRef.current.play();
-          setIsPlaying(true);
-        }
+      if (player) {
+        player.seekTo(timestamp, true).playVideo();
+        setIsPlaying(true);
+      }
+      if (audioRef.current) {
+        audioRef.current.currentTime = timestamp;
+        audioRef.current.play();
+        setIsPlaying(true);
       }
     });
 
     socket.on('pause', (timestamp: number) => {
-      if (!isHost) {
-        if (player) {
-          player.seekTo(timestamp, true).pauseVideo();
-          setIsPlaying(false);
-        }
-        if (audioRef.current) {
-          audioRef.current.currentTime = timestamp;
-          audioRef.current.pause();
-          setIsPlaying(false);
-        }
+      if (player) {
+        player.seekTo(timestamp, true).pauseVideo();
+        setIsPlaying(false);
+      }
+      if (audioRef.current) {
+        audioRef.current.currentTime = timestamp;
+        audioRef.current.pause();
+        setIsPlaying(false);
       }
     });
 
     socket.on('stop', () => {
-      if (!isHost) {
-        if (player) {
-          player.stopVideo();
-          setIsPlaying(false);
-        }
-        if (audioRef.current) {
-          audioRef.current.pause();
-          audioRef.current.currentTime = 0;
-          setIsPlaying(false);
-        }
+      if (player) {
+        player.stopVideo();
+        setIsPlaying(false);
+      }
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
+        setIsPlaying(false);
       }
     });
 
@@ -78,14 +71,14 @@ const Player: React.FC<PlayerProps> = ({ videoId, audioUrl, roomId, isHost = fal
       socket.off('pause');
       socket.off('stop');
     };
-  }, [player, audioRef, isHost, roomId]);
+  }, [player, audioRef, roomId]);
 
   const onReady = (event: { target: YouTubePlayer }) => {
     setPlayer(event.target);
   };
 
   const handlePlay = () => {
-    if (isHost && roomId) {
+    if (roomId) {
       const timestamp = player ? player.getCurrentTime() : audioRef.current?.currentTime || 0;
       if (player) player.playVideo();
       if (audioRef.current) audioRef.current.play();
@@ -95,7 +88,7 @@ const Player: React.FC<PlayerProps> = ({ videoId, audioUrl, roomId, isHost = fal
   };
 
   const handlePause = () => {
-    if (isHost && roomId) {
+    if (roomId) {
       const timestamp = player ? player.getCurrentTime() : audioRef.current?.currentTime || 0;
       if (player) player.pauseVideo();
       if (audioRef.current) audioRef.current.pause();
@@ -105,7 +98,7 @@ const Player: React.FC<PlayerProps> = ({ videoId, audioUrl, roomId, isHost = fal
   };
 
   const handleStop = () => {
-    if (isHost && roomId) {
+    if (roomId) {
       if (player) player.stopVideo();
       if (audioRef.current) {
         audioRef.current.pause();
@@ -126,32 +119,28 @@ const Player: React.FC<PlayerProps> = ({ videoId, audioUrl, roomId, isHost = fal
             onReady={onReady}
             className="mb-2"
           />
-          {isHost ? (
-            <div className="flex justify-center gap-4">
-              <button
-                onClick={handlePlay}
-                className="bg-green-600 text-white p-2 rounded hover:bg-green-700 transition"
-                disabled={isPlaying}
-              >
-                Play
-              </button>
-              <button
-                onClick={handlePause}
-                className="bg-yellow-600 text-white p-2 rounded hover:bg-yellow-700 transition"
-                disabled={!isPlaying}
-              >
-                Pause
-              </button>
-              <button
-                onClick={handleStop}
-                className="bg-red-600 text-white p-2 rounded hover:bg-red-700 transition"
-              >
-                Stop
-              </button>
-            </div>
-          ) : (
-            <p className="text-center text-white">Now Playing: {videoId} (Host Controlled)</p>
-          )}
+          <div className="flex justify-center gap-4">
+            <button
+              onClick={handlePlay}
+              className="bg-green-600 text-white p-2 rounded hover:bg-green-700 transition"
+              disabled={isPlaying}
+            >
+              Play
+            </button>
+            <button
+              onClick={handlePause}
+              className="bg-yellow-600 text-white p-2 rounded hover:bg-yellow-700 transition"
+              disabled={!isPlaying}
+            >
+              Pause
+            </button>
+            <button
+              onClick={handleStop}
+              className="bg-red-600 text-white p-2 rounded hover:bg-red-700 transition"
+            >
+              Stop
+            </button>
+          </div>
         </>
       )}
       {audioUrl && (
@@ -164,32 +153,28 @@ const Player: React.FC<PlayerProps> = ({ videoId, audioUrl, roomId, isHost = fal
             <source src={audioUrl} type="audio/mpeg" />
             Your browser does not support the audio element.
           </audio>
-          {isHost ? (
-            <div className="flex justify-center gap-4">
-              <button
-                onClick={handlePlay}
-                className="bg-green-600 text-white p-2 rounded hover:bg-green-700 transition"
-                disabled={isPlaying}
-              >
-                Play
-              </button>
-              <button
-                onClick={handlePause}
-                className="bg-yellow-600 text-white p-2 rounded hover:bg-yellow-700 transition"
-                disabled={!isPlaying}
-              >
-                Pause
-              </button>
-              <button
-                onClick={handleStop}
-                className="bg-red-600 text-white p-2 rounded hover:bg-red-700 transition"
-              >
-                Stop
-              </button>
-            </div>
-          ) : (
-            <p className="text-center text-white">Now Playing: Audio Track (Host Controlled)</p>
-          )}
+          <div className="flex justify-center gap-4">
+            <button
+              onClick={handlePlay}
+              className="bg-green-600 text-white p-2 rounded hover:bg-green-700 transition"
+              disabled={isPlaying}
+            >
+              Play
+            </button>
+            <button
+              onClick={handlePause}
+              className="bg-yellow-600 text-white p-2 rounded hover:bg-yellow-700 transition"
+              disabled={!isPlaying}
+            >
+              Pause
+            </button>
+            <button
+              onClick={handleStop}
+              className="bg-red-600 text-white p-2 rounded hover:bg-red-700 transition"
+            >
+              Stop
+            </button>
+          </div>
         </>
       )}
       {!videoId && !audioUrl && (

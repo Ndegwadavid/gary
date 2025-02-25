@@ -58,7 +58,7 @@ const Room: React.FC<RoomProps> = ({ user }) => {
 
     socket.emit('join-room', { roomId: id, userName: user.email || 'Guest' });
     socket.on('user-joined', ({ userId, userName }: { userId: string; userName: string }) => {
-      if (!isHost) setIsHost(userId === socket.id);
+      if (!isHost) setIsHost(userId === socket.id); // Still track host for video chat
       setOnlineUsers((prev) => {
         const updated = prev.filter((u) => u.name !== userName);
         return [...updated, { id: userId, name: userName }];
@@ -207,7 +207,7 @@ const Room: React.FC<RoomProps> = ({ user }) => {
   };
 
   const changeTrack = (track: Track) => {
-    if (isHost && id) {
+    if (id) {
       setCurrentTrack(track);
       socket.emit('track-changed', { roomId: id, ...track });
       setDoc(doc(db, 'rooms', id), { currentTrack: track }, { merge: true });
@@ -332,7 +332,6 @@ const Room: React.FC<RoomProps> = ({ user }) => {
           videoId={currentTrack.videoId}
           audioUrl={currentTrack.audioUrl}
           roomId={id}
-          isHost={isHost}
         />
         <div className="mt-4 flex flex-col gap-2 max-w-md mx-auto">
           <div className="flex gap-2">
@@ -353,29 +352,24 @@ const Room: React.FC<RoomProps> = ({ user }) => {
           {searchResults.map((result, index) => (
             <button
               key={index}
-              onClick={() => isHost && changeTrack({ videoId: result.videoId, audioUrl: result.audioUrl })}
-              className={`bg-blue-500 text-white p-2 rounded hover:bg-blue-600 transition ${!isHost ? 'opacity-50 cursor-not-allowed' : ''}`}
-              disabled={!isHost}
+              onClick={() => changeTrack({ videoId: result.videoId, audioUrl: result.audioUrl })}
+              className="bg-blue-500 text-white p-2 rounded hover:bg-blue-600 transition"
             >
-              {result.title} {isHost ? '' : '(Host Only)'}
+              {result.title}
             </button>
           ))}
-          {isHost && (
-            <>
-              <button
-                onClick={() => changeTrack({ videoId: 'dQw4w9WgXcQ' })}
-                className="bg-blue-600 text-white p-2 rounded hover:bg-blue-700 transition"
-              >
-                Play Rickroll (YouTube)
-              </button>
-              <button
-                onClick={() => changeTrack({ audioUrl: 'https://prod-1.storage.jamendo.com/?trackid=143356&format=mp31' })}
-                className="bg-blue-600 text-white p-2 rounded hover:bg-blue-700 transition"
-              >
-                Play Sample Jamendo Track
-              </button>
-            </>
-          )}
+          <button
+            onClick={() => changeTrack({ videoId: 'dQw4w9WgXcQ' })}
+            className="bg-blue-600 text-white p-2 rounded hover:bg-blue-700 transition"
+          >
+            Play Rickroll (YouTube)
+          </button>
+          <button
+            onClick={() => changeTrack({ audioUrl: 'https://prod-1.storage.jamendo.com/?trackid=143356&format=mp31' })}
+            className="bg-blue-600 text-white p-2 rounded hover:bg-blue-700 transition"
+          >
+            Play Sample Jamendo Track
+          </button>
         </div>
       </div>
       <Chat
