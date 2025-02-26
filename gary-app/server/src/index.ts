@@ -24,6 +24,8 @@ interface TrackData {
   roomId: string;
   audioUrl?: string;
   title?: string;
+  timestamp?: number;
+  isPlaying?: boolean;
 }
 
 interface ChatMessage {
@@ -50,7 +52,7 @@ io.on('connection', (socket: Socket) => {
     onlineUsers[socket.id] = { roomId, userName };
     socket.join(roomId);
     socket.to(roomId).emit('user-joined', { userId: socket.id, userName });
-    io.emit('user-list', onlineUsers); // Emit full list to ensure sync
+    io.emit('user-list', onlineUsers);
   });
 
   socket.on('play', ({ roomId, timestamp }: SyncData) => {
@@ -68,8 +70,8 @@ io.on('connection', (socket: Socket) => {
     io.emit('user-list', onlineUsers);
   });
 
-  socket.on('track-changed', ({ roomId, audioUrl, title }: TrackData) => {
-    socket.to(roomId).emit('track-changed', { audioUrl, title });
+  socket.on('track-changed', ({ roomId, audioUrl, title, timestamp, isPlaying }: TrackData) => {
+    socket.to(roomId).emit('track-changed', { audioUrl, title, timestamp, isPlaying });
   });
 
   socket.on('chat-message', ({ roomId, message }: ChatMessage) => {
@@ -90,6 +92,10 @@ io.on('connection', (socket: Socket) => {
 
   socket.on('call-ignored', ({ roomId, from }: { roomId: string; from: string }) => {
     socket.to(roomId).emit('call-ignored', from);
+  });
+
+  socket.on('call-cancelled', ({ roomId }: { roomId: string }) => {
+    socket.to(roomId).emit('call-cancelled');
   });
 
   socket.on('disconnect', () => {

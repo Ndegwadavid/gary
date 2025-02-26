@@ -42,6 +42,7 @@ const Room: React.FC<RoomProps> = ({ user }) => {
   const [onlineUsers, setOnlineUsers] = useState<{ id: string; name: string }[]>([]);
   const [peerConnection, setPeerConnection] = useState<RTCPeerConnection | null>(null);
   const [videoChatActive, setVideoChatActive] = useState(false);
+  const [isCallPending, setIsCallPending] = useState(false); // New state for pending call
   const [incomingCall, setIncomingCall] = useState<{ from: string; offer: RTCSessionDescriptionInit } | null>(null);
   const [callStatus, setCallStatus] = useState<string | null>(null);
   const [declinedUsers, setDeclinedUsers] = useState<string[]>([]);
@@ -60,7 +61,6 @@ const Room: React.FC<RoomProps> = ({ user }) => {
 
     socket.on('user-joined', ({ userId }: { userId: string }) => {
       if (!isHost) setIsHost(userId === socket.id);
-      // No state update here—rely on user-list
     });
 
     socket.on('track-changed', (track: Track) => {
@@ -92,7 +92,6 @@ const Room: React.FC<RoomProps> = ({ user }) => {
       const roomUsers = Object.entries(users)
         .filter(([_, data]) => data.roomId === id)
         .map(([userId, data]) => ({ id: userId, name: data.userName || 'Unknown' }));
-      // Use Map to ensure uniqueness by id
       setOnlineUsers(Array.from(new Map(roomUsers.map((u) => [u.id, u])).values()));
     });
 
@@ -104,6 +103,7 @@ const Room: React.FC<RoomProps> = ({ user }) => {
       if (peerConnection) {
         peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
         setVideoChatActive(true);
+        setIsCallPending(false); // Call is accepted, no longer pending
       }
     });
 
@@ -119,7 +119,13 @@ const Room: React.FC<RoomProps> = ({ user }) => {
       setDeclinedUsers((prev) => [...prev, from]);
       setCallStatus(`${declinedUsers.concat(from).join(' and ')} declined your video call`);
       setVideoChatActive(false);
+      setIsCallPending(false);
       setPeerConnection(null);
+    });
+
+    socket.on('call-cancelled', () => {
+      setIncomingCall(null);
+      setCallStatus('Video call was cancelled by the initiator.');
     });
 
     const unsubscribe = onSnapshot(doc(db, 'rooms', id), (docSnap) => {
@@ -144,6 +150,7 @@ const Room: React.FC<RoomProps> = ({ user }) => {
       socket.off('answer');
       socket.off('ice-candidate');
       socket.off('call-ignored');
+      socket.off('call-cancelled');
       unsubscribe();
       if (peerConnection) peerConnection.close();
     };
@@ -186,6 +193,7 @@ const Room: React.FC<RoomProps> = ({ user }) => {
       socket.emit('offer', { roomId: id, from: user.email || user.uid, offer });
 
       setVideoChatActive(true);
+      setIsCallPending(true); // Call is pending until accepted or cancelled
       setCallStatus(null);
       setDeclinedUsers([]);
     } catch (err: unknown) {
@@ -193,6 +201,17 @@ const Room: React.FC<RoomProps> = ({ user }) => {
       console.error('Error starting video chat:', error);
       setCallStatus(`Failed to start video chat: ${error.message}`);
       setVideoChatActive(false);
+      setIsCallPending(false);
+    }
+  };
+
+  const cancelCall = () => {
+    if (id && videoChatActive && isCallPending) {
+      socket.emit('call-cancelled', { roomId: id });
+      setVideoChatActive(false);
+      setIsCallPending(false);
+      setPeerConnection(null);
+      setCallStatus('Video call cancelled.');
     }
   };
 
@@ -307,16 +326,25 @@ const Room: React.FC<RoomProps> = ({ user }) => {
       )}
       <div className="mt-8 flex flex-col items-center gap-4">
         {videoChatActive ? (
-          <div className="flex justify-center gap-4">
-            <div>
-              <h3 className="text-lg font-semibold mb-2">Your Video</h3>
-              <video ref={localVideoRef} autoPlay muted className="w-64 h-48 rounded-lg" />
+          isCallPending ? (
+            <button
+              onClick={cancelCall}
+              className="bg-red-600 text-white p-3 rounded-full hover:bg-red-700 transition"
+            >
+              Cancel Call
+            </button>
+          ) : (
+            <div className="flex justify-center gap-4">
+              <div>
+                <h3 className="text-lg font-semibold mb-2">Your Video</h3>
+                <video ref={localVideoRef} autoPlay muted className="w-64 h-48 rounded-lg" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold mb-2">Partner's Video</h3>
+                <video ref={remoteVideoRef} autoPlay className="w-64 h-48 rounded-lg" />
+              </div>
             </div>
-            <div>
-              <h3 className="text-lg font-semibold mb-2">Partner's Video</h3>
-              <video ref={remoteVideoRef} autoPlay className="w-64 h-48 rounded-lg" />
-            </div>
-          </div>
+          )
         ) : (
           <button
             onClick={startVideoChat}
