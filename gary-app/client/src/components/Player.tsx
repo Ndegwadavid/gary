@@ -9,14 +9,22 @@ const getSocketUrl = () => {
 
 const socket = io(getSocketUrl(), { transports: ['websocket', 'polling'] });
 
+interface Track {
+  audioUrl?: string;
+  title?: string;
+  timestamp?: number;
+  isPlaying?: boolean;
+}
+
 interface PlayerProps {
   audioUrl?: string;
   roomId?: string;
+  currentTrack?: Track; // Made optional for Landing.tsx
 }
 
-const Player: React.FC<PlayerProps> = ({ audioUrl, roomId }) => {
+const Player: React.FC<PlayerProps> = ({ audioUrl, roomId, currentTrack = {} }) => {
   const audioRef = useRef<HTMLAudioElement>(null);
-  const [isPlaying, setIsPlaying] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(currentTrack.isPlaying || false);
 
   useEffect(() => {
     if (!roomId || !audioUrl) return;
@@ -45,23 +53,50 @@ const Player: React.FC<PlayerProps> = ({ audioUrl, roomId }) => {
       }
     });
 
-    // Auto-sync on join if track is already playing
-    if (audioRef.current && isPlaying) {
-      audioRef.current.play().catch((err) => console.error('Auto-play error:', err));
+    socket.on('track-changed', (track: Track) => {
+      if (audioRef.current && track.audioUrl) {
+        audioRef.current.src = track.audioUrl;
+        audioRef.current.currentTime = track.timestamp || 0;
+        if (track.isPlaying) {
+          audioRef.current.play().catch((err) => console.error('Broadcast play error:', err));
+          setIsPlaying(true);
+        } else {
+          audioRef.current.pause();
+          setIsPlaying(false);
+        }
+      }
+    });
+
+    // Sync on join or prop change (only if roomId exists)
+    if (audioRef.current && audioUrl && roomId) {
+      audioRef.current.src = audioUrl;
+      audioRef.current.currentTime = currentTrack.timestamp || 0;
+      if (currentTrack.isPlaying) {
+        audioRef.current.play().catch((err) => console.error('Join sync play error:', err));
+        setIsPlaying(true);
+      } else {
+        audioRef.current.pause();
+        setIsPlaying(false);
+      }
     }
 
     return () => {
       socket.off('play');
       socket.off('pause');
       socket.off('stop');
+      socket.off('track-changed');
     };
-  }, [audioUrl, roomId, isPlaying]);
+  }, [audioUrl, roomId, currentTrack]);
 
   const handlePlay = () => {
     if (roomId && audioRef.current) {
       const timestamp = audioRef.current.currentTime || 0;
       audioRef.current.play().catch((err) => console.error('Play error:', err));
       socket.emit('play', { roomId, timestamp });
+      setIsPlaying(true);
+    } else if (audioRef.current) {
+      // For Landing.tsx (no roomId)
+      audioRef.current.play().catch((err) => console.error('Preview play error:', err));
       setIsPlaying(true);
     }
   };
@@ -72,6 +107,10 @@ const Player: React.FC<PlayerProps> = ({ audioUrl, roomId }) => {
       audioRef.current.pause();
       socket.emit('pause', { roomId, timestamp });
       setIsPlaying(false);
+    } else if (audioRef.current) {
+      // For Landing.tsx
+      audioRef.current.pause();
+      setIsPlaying(false);
     }
   };
 
@@ -80,6 +119,11 @@ const Player: React.FC<PlayerProps> = ({ audioUrl, roomId }) => {
       audioRef.current.pause();
       audioRef.current.currentTime = 0;
       socket.emit('stop', { roomId });
+      setIsPlaying(false);
+    } else if (audioRef.current) {
+      // For Landing.tsx
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
       setIsPlaying(false);
     }
   };

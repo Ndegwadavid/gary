@@ -7,7 +7,7 @@ import AuthComponent from '../components/Auth';
 interface Track {
   id: string;
   title: string;
-  audioUrl?: string; // Only audioUrl, no videoId
+  audioUrl?: string;
 }
 
 interface LandingProps {
@@ -52,7 +52,7 @@ const Landing: React.FC<LandingProps> = ({ user }) => {
             key={track.id}
             className="bg-white bg-opacity-20 p-4 rounded-lg flex items-center hover:bg-opacity-30 transition"
           >
-            <Player audioUrl={track.audioUrl} /> {/* Only audioUrl */}
+            <Player audioUrl={track.audioUrl} /> {/* No roomId or currentTrack needed */}
             <span className="ml-4">{track.title}</span>
           </div>
         ))}

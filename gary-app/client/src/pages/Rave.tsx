@@ -29,6 +29,8 @@ interface Message {
 interface Track {
   audioUrl?: string;
   title?: string;
+  timestamp?: number;
+  isPlaying?: boolean;
 }
 
 const Rave: React.FC<RaveProps> = ({ user }) => {
@@ -42,6 +44,7 @@ const Rave: React.FC<RaveProps> = ({ user }) => {
   const [videoChatActive, setVideoChatActive] = useState(false);
   const [incomingCall, setIncomingCall] = useState<{ from: string; offer: RTCSessionDescriptionInit } | null>(null);
   const [callStatus, setCallStatus] = useState<string | null>(null);
+  const [declinedUsers, setDeclinedUsers] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Track[]>([]);
   const localVideoRef = useRef<HTMLVideoElement>(null);
@@ -55,6 +58,7 @@ const Rave: React.FC<RaveProps> = ({ user }) => {
 
     const raveId = `rave-${id}`;
     socket.emit('join-room', { roomId: raveId, userName: user.email || user.uid });
+
     socket.on('user-joined', ({ userId, userName }: { userId: string; userName: string }) => {
       if (!isHost) setIsHost(userId === socket.id);
       setOnlineUsers((prev) => {
@@ -62,19 +66,23 @@ const Rave: React.FC<RaveProps> = ({ user }) => {
         return [...updated, { id: userId, name: userName }];
       });
     });
+
     socket.on('track-changed', (track: Track) => {
       setCurrentTrack(track);
-      setDoc(doc(db, 'raves', id), { currentTrack: track }, { merge: true });
     });
+
     socket.on('play', (timestamp: number) => {
-      setCurrentTrack((prev) => ({ ...prev }));
+      setCurrentTrack((prev) => ({ ...prev, timestamp, isPlaying: true }));
     });
+
     socket.on('pause', (timestamp: number) => {
-      setCurrentTrack((prev) => ({ ...prev }));
+      setCurrentTrack((prev) => ({ ...prev, timestamp, isPlaying: false }));
     });
+
     socket.on('stop', () => {
-      setCurrentTrack((prev) => ({ ...prev }));
+      setCurrentTrack((prev) => ({ ...prev, timestamp: 0, isPlaying: false }));
     });
+
     socket.on('chat-message', (message: Message) => {
       setMessages((prev) => {
         if (!prev.some((m) => m.timestamp === message.timestamp && m.text === message.text)) {
@@ -83,6 +91,7 @@ const Rave: React.FC<RaveProps> = ({ user }) => {
         return prev;
       });
     });
+
     socket.on('user-list', (users: { [key: string]: { roomId?: string; userName?: string } }) => {
       const roomUsers = Object.entries(users)
         .filter(([_, data]) => data.roomId === raveId)
@@ -102,11 +111,16 @@ const Rave: React.FC<RaveProps> = ({ user }) => {
     });
 
     socket.on('ice-candidate', (candidate: RTCIceCandidateInit) => {
-      if (peerConnection) peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+      if (peerConnection) {
+        peerConnection.addIceCandidate(new RTCIceCandidate(candidate)).catch((err) =>
+          console.error('ICE candidate error:', err)
+        );
+      }
     });
 
     socket.on('call-ignored', (from: string) => {
-      setCallStatus(`${from} declined your video call`);
+      setDeclinedUsers((prev) => [...prev, from]);
+      setCallStatus(`${declinedUsers.concat(from).join(' and ')} declined your video call`);
       setVideoChatActive(false);
       setPeerConnection(null);
     });
@@ -116,7 +130,9 @@ const Rave: React.FC<RaveProps> = ({ user }) => {
     const unsubscribe = onSnapshot(doc(db, 'raves', id), (docSnap) => {
       if (docSnap.exists()) {
         const data = docSnap.data();
-        if (data.currentTrack) setCurrentTrack(data.currentTrack);
+        if (data.currentTrack) {
+          setCurrentTrack(data.currentTrack);
+        }
         if (data.messages) setMessages(data.messages);
       }
     });
@@ -136,7 +152,7 @@ const Rave: React.FC<RaveProps> = ({ user }) => {
       unsubscribe();
       if (peerConnection) peerConnection.close();
     };
-  }, [user, id, navigate, isHost, peerConnection]);
+  }, [user, id, navigate, isHost, peerConnection, declinedUsers]);
 
   const startVideoChat = async () => {
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
@@ -176,6 +192,7 @@ const Rave: React.FC<RaveProps> = ({ user }) => {
 
       setVideoChatActive(true);
       setCallStatus(null);
+      setDeclinedUsers([]);
     } catch (err: unknown) {
       const error = err as Error;
       console.error('Error starting video chat:', error);
@@ -185,7 +202,10 @@ const Rave: React.FC<RaveProps> = ({ user }) => {
   };
 
   const acceptCall = async () => {
-    if (!peerConnection || !incomingCall || !id || !user) return;
+    if (!peerConnection || !incomingCall || !id || !user) {
+      console.error('Cannot accept call: missing peerConnection, incomingCall, id, or user');
+      return;
+    }
 
     try {
       await peerConnection.setRemoteDescription(new RTCSessionDescription(incomingCall.offer));
@@ -199,6 +219,7 @@ const Rave: React.FC<RaveProps> = ({ user }) => {
 
       setVideoChatActive(true);
       setIncomingCall(null);
+      setCallStatus(null);
     } catch (err: unknown) {
       const error = err as Error;
       console.error('Error accepting call:', error);
@@ -216,9 +237,10 @@ const Rave: React.FC<RaveProps> = ({ user }) => {
 
   const changeTrack = (track: Track) => {
     if (id) {
-      setCurrentTrack(track);
-      socket.emit('track-changed', { roomId: `rave-${id}`, ...track });
-      setDoc(doc(db, 'raves', id), { currentTrack: track }, { merge: true });
+      const newTrack = { ...track, timestamp: 0, isPlaying: false };
+      setCurrentTrack(newTrack);
+      socket.emit('track-changed', { roomId: `rave-${id}`, ...newTrack });
+      setDoc(doc(db, 'raves', id), { currentTrack: newTrack }, { merge: true });
     }
   };
 
@@ -330,6 +352,7 @@ const Rave: React.FC<RaveProps> = ({ user }) => {
         <Player
           audioUrl={currentTrack.audioUrl}
           roomId={`rave-${id}`}
+          currentTrack={currentTrack}
         />
         <div className="mt-4 flex flex-col gap-2 max-w-md mx-auto">
           <div className="flex gap-2">
