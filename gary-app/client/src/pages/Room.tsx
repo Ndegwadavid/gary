@@ -42,7 +42,7 @@ const Room: React.FC<RoomProps> = ({ user }) => {
   const [onlineUsers, setOnlineUsers] = useState<{ id: string; name: string }[]>([]);
   const [peerConnection, setPeerConnection] = useState<RTCPeerConnection | null>(null);
   const [videoChatActive, setVideoChatActive] = useState(false);
-  const [isCallPending, setIsCallPending] = useState(false); // New state for pending call
+  const [isCallPending, setIsCallPending] = useState(false);
   const [incomingCall, setIncomingCall] = useState<{ from: string; offer: RTCSessionDescriptionInit } | null>(null);
   const [callStatus, setCallStatus] = useState<string | null>(null);
   const [declinedUsers, setDeclinedUsers] = useState<string[]>([]);
@@ -97,13 +97,20 @@ const Room: React.FC<RoomProps> = ({ user }) => {
 
     socket.on('offer', (data: { from: string; offer: RTCSessionDescriptionInit }) => {
       setIncomingCall(data);
+      // Initialize peerConnection when receiving an offer if not already set
+      if (!peerConnection) {
+        const pc = new RTCPeerConnection({
+          iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
+        });
+        setPeerConnection(pc);
+      }
     });
 
     socket.on('answer', (answer: RTCSessionDescriptionInit) => {
       if (peerConnection) {
         peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
         setVideoChatActive(true);
-        setIsCallPending(false); // Call is accepted, no longer pending
+        setIsCallPending(false);
       }
     });
 
@@ -193,7 +200,7 @@ const Room: React.FC<RoomProps> = ({ user }) => {
       socket.emit('offer', { roomId: id, from: user.email || user.uid, offer });
 
       setVideoChatActive(true);
-      setIsCallPending(true); // Call is pending until accepted or cancelled
+      setIsCallPending(true);
       setCallStatus(null);
       setDeclinedUsers([]);
     } catch (err: unknown) {
@@ -216,19 +223,30 @@ const Room: React.FC<RoomProps> = ({ user }) => {
   };
 
   const acceptCall = async () => {
-    if (!peerConnection || !incomingCall || !id || !user) {
-      console.error('Cannot accept call: missing peerConnection, incomingCall, id, or user');
+    if (!id || !user) {
+      console.error('Cannot accept call: missing id or user', { id, user });
       return;
+    }
+    if (!incomingCall) {
+      console.error('Cannot accept call: no incoming call data', { incomingCall });
+      return;
+    }
+    if (!peerConnection) {
+      console.warn('peerConnection is null, initializing new connection');
+      const pc = new RTCPeerConnection({
+        iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
+      });
+      setPeerConnection(pc);
     }
 
     try {
-      await peerConnection.setRemoteDescription(new RTCSessionDescription(incomingCall.offer));
+      await peerConnection!.setRemoteDescription(new RTCSessionDescription(incomingCall.offer));
       const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
       if (localVideoRef.current) localVideoRef.current.srcObject = stream;
-      stream.getTracks().forEach((track) => peerConnection.addTrack(track, stream));
+      stream.getTracks().forEach((track) => peerConnection!.addTrack(track, stream));
 
-      const answer = await peerConnection.createAnswer();
-      await peerConnection.setLocalDescription(answer);
+      const answer = await peerConnection!.createAnswer();
+      await peerConnection!.setLocalDescription(answer);
       socket.emit('answer', { roomId: id, answer });
 
       setVideoChatActive(true);

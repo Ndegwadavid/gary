@@ -42,7 +42,7 @@ const Rave: React.FC<RaveProps> = ({ user }) => {
   const [onlineUsers, setOnlineUsers] = useState<{ id: string; name: string }[]>([]);
   const [peerConnection, setPeerConnection] = useState<RTCPeerConnection | null>(null);
   const [videoChatActive, setVideoChatActive] = useState(false);
-  const [isCallPending, setIsCallPending] = useState(false); // New state for pending call
+  const [isCallPending, setIsCallPending] = useState(false);
   const [incomingCall, setIncomingCall] = useState<{ from: string; offer: RTCSessionDescriptionInit } | null>(null);
   const [callStatus, setCallStatus] = useState<string | null>(null);
   const [declinedUsers, setDeclinedUsers] = useState<string[]>([]);
@@ -52,7 +52,7 @@ const Rave: React.FC<RaveProps> = ({ user }) => {
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
-    if (!user || !id || !/^[a-zA-Z0-9]+$/.test(id)) {
+    if (!user || !id || !/^[a-zAZ0-9]+$/.test(id)) {
       navigate('/');
       return;
     }
@@ -98,6 +98,12 @@ const Rave: React.FC<RaveProps> = ({ user }) => {
 
     socket.on('offer', (data: { from: string; offer: RTCSessionDescriptionInit }) => {
       setIncomingCall(data);
+      if (!peerConnection) {
+        const pc = new RTCPeerConnection({
+          iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
+        });
+        setPeerConnection(pc);
+      }
     });
 
     socket.on('answer', (answer: RTCSessionDescriptionInit) => {
@@ -219,19 +225,30 @@ const Rave: React.FC<RaveProps> = ({ user }) => {
   };
 
   const acceptCall = async () => {
-    if (!peerConnection || !incomingCall || !id || !user) {
-      console.error('Cannot accept call: missing peerConnection, incomingCall, id, or user');
+    if (!id || !user) {
+      console.error('Cannot accept call: missing id or user', { id, user });
       return;
+    }
+    if (!incomingCall) {
+      console.error('Cannot accept call: no incoming call data', { incomingCall });
+      return;
+    }
+    if (!peerConnection) {
+      console.warn('peerConnection is null, initializing new connection');
+      const pc = new RTCPeerConnection({
+        iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
+      });
+      setPeerConnection(pc);
     }
 
     try {
-      await peerConnection.setRemoteDescription(new RTCSessionDescription(incomingCall.offer));
+      await peerConnection!.setRemoteDescription(new RTCSessionDescription(incomingCall.offer));
       const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
       if (localVideoRef.current) localVideoRef.current.srcObject = stream;
-      stream.getTracks().forEach((track) => peerConnection.addTrack(track, stream));
+      stream.getTracks().forEach((track) => peerConnection!.addTrack(track, stream));
 
-      const answer = await peerConnection.createAnswer();
-      await peerConnection.setLocalDescription(answer);
+      const answer = await peerConnection!.createAnswer();
+      await peerConnection!.setLocalDescription(answer);
       socket.emit('answer', { roomId: `rave-${id}`, answer });
 
       setVideoChatActive(true);
