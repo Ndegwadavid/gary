@@ -3,8 +3,9 @@ import { useEffect, useState, useRef } from 'react';
 import io from 'socket.io-client';
 
 const getSocketUrl = () => {
-  const host = window.location.hostname === 'localhost' ? 'localhost' : window.location.hostname;
-  return `http://${host}:5000`; // Update to deployed URL in production
+  return process.env.NODE_ENV === 'production'
+    ? 'https://gary-server.onrender.com' // Secure WebSocket via HTTPS
+    : 'http://localhost:5000'; // Local development (HTTP for simplicity)
 };
 
 const socket = io(getSocketUrl(), { transports: ['websocket', 'polling'] });
