@@ -1,33 +1,32 @@
 {
-  "name": "gary-server",
-  "version": "1.0.0",
-  "description": "Server for Gary app - real-time music sync and chat",
-  "main": "dist/index.js",
-  "scripts": {
-    "start": "node dist/index.js",
-    "build": "tsc",
-    "dev": "nodemon src/index.ts",
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "keywords": [
-    "gary",
-    "music-sync",
-    "real-time",
-    "socket.io"
-  ],
-  "author": "Davy",
-  "license": "ISC",
-  "dependencies": {
-    "express": "^4.21.2",
-    "socket.io": "^4.8.1",
-    "dotenv": "^16.4.7",
-    "typescript": "^5.7.3",
-    "@types/express": "^4.17.21",
-    "@types/node": "^22.13.5",
-    "@types/socket.io": "^3.0.2"
-  },
-  "devDependencies": {
-    "nodemon": "^3.1.9",
-    "ts-node": "^10.9.2"
-  }
+	"name": "gary-server",
+	"version": "1.0.0",
+	"description": "Server for Gary app - real-time music sync and chat",
+	"main": "dist/index.js",
+	"scripts": {
+		"start": "node dist/index.js",
+		"build": "npm install && tsc",
+		"dev": "nodemon --exec ts-node src/index.ts",
+		"test": "echo \"Error: no test specified\" && exit 1"
+	},
+	"keywords": [
+		"gary",
+		"music-sync",
+		"real-time",
+		"socket.io"
+	],
+	"author": "Davy",
+	"license": "ISC",
+	"dependencies": {
+		"dotenv": "^16.4.7",
+		"express": "^4.21.2",
+		"socket.io": "^4.8.1",
+		"typescript": "^5.7.3"
+	},
+	"devDependencies": {
+		"@types/express": "^5.0.0",
+		"@types/node": "^22.13.5",
+		"nodemon": "^3.1.9",
+		"ts-node": "^10.9.2"
+	}
 }

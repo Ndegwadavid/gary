@@ -8,8 +8,11 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-    "lib": ["es6", "DOM"]
+    "moduleResolution": "node",
+    "resolveJsonModule": true,
+    "lib": ["es6", "DOM"],
+    "types": ["node", "express", "socket.io"]
   },
-  "include": ["src"],
+  "include": ["src/**/*"],
   "exclude": ["node_modules"]
 }
