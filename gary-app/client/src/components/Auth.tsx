@@ -1,3 +1,4 @@
+// client/src/components/Auth.tsx
 import { useState } from 'react';
 import {
   signInWithEmailAndPassword,
@@ -29,7 +30,29 @@ const Auth: React.FC<AuthProps> = ({ onClose }) => {
       onClose();
       navigate('/me');
     } catch (error: any) {
-      setError(error.message);
+      let errorMessage = error.message;
+      switch (error.code) {
+        case 'auth/network-request-failed':
+          errorMessage =
+            'Network error: Ensure Firebase emulators are running or check your internet connection.';
+          break;
+        case 'auth/invalid-email':
+          errorMessage = 'Invalid email format.';
+          break;
+        case 'auth/user-not-found':
+        case 'auth/wrong-password':
+          errorMessage = 'Invalid email or password.';
+          break;
+        case 'auth/email-already-in-use':
+          errorMessage = 'Email is already in use.';
+          break;
+        case 'auth/weak-password':
+          errorMessage = 'Password must be at least 6 characters long.';
+          break;
+        default:
+          errorMessage = `Authentication failed: ${error.message}`;
+      }
+      setError(errorMessage);
       console.error(`${isSignUp ? 'Signup' : 'Login'} failed:`, error);
     }
   };
@@ -41,7 +64,22 @@ const Auth: React.FC<AuthProps> = ({ onClose }) => {
       onClose();
       navigate('/me');
     } catch (error: any) {
-      setError(error.message);
+      let errorMessage = error.message;
+      switch (error.code) {
+        case 'auth/network-request-failed':
+          errorMessage =
+            'Network error: Ensure Firebase emulators are running or check your internet connection.';
+          break;
+        case 'auth/popup-closed-by-user':
+          errorMessage = 'Google sign-in popup was closed.';
+          break;
+        case 'auth/popup-blocked':
+          errorMessage = 'Popup was blocked by the browser. Please allow popups.';
+          break;
+        default:
+          errorMessage = `Google authentication failed: ${error.message}`;
+      }
+      setError(errorMessage);
       console.error('Google auth failed:', error);
     }
   };

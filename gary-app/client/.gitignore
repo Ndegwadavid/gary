@@ -1,24 +1,44 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+# Dependency directories
+node_modules/
 
-# dependencies
-/node_modules
-/.pnp
-.pnp.js
+# Build output
+build/
 
-# testing
-/coverage
-
-# production
-/build
-
-# misc
-.DS_Store
-.env.local
+# Environment variables
 .env
+.env.local
 .env.development.local
 .env.test.local
 .env.production.local
 
+# Logs
+*.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+dataconnect-debug.log
+firestore-debug.log
+
+# Firebase emulator data and generated files
+/dataconnect-generated/
+/dataconnect/.dataconnect/pgliteData
+
+# Local development files
+*.pem
+*.key
+*.cert
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Editor directories and files
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+
+# Test artifacts
+coverage/
