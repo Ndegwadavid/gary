@@ -8,14 +8,14 @@ import Player from '../components/Player';
 import Chat from '../components/Chat';
 import io from 'socket.io-client';
 
-// Socket.IO URL updated for Render deployment
 const getSocketUrl = () => {
   return process.env.NODE_ENV === 'production'
-    ? 'https://gary-server.onrender.com' // Secure WebSocket via HTTPS
-    : 'http://localhost:5000'; // Local development (HTTP for simplicity)
+    ? 'https://gary-server.onrender.com' // Render URL for production
+    : 'http://localhost:5000'; // Local development
 };
 
 const socket = io(getSocketUrl(), { transports: ['websocket', 'polling'] });
+
 interface RaveProps {
   user: User | null;
 }
@@ -99,11 +99,26 @@ const Rave: React.FC<RaveProps> = ({ user }) => {
     });
 
     socket.on('offer', (data: { from: string; offer: RTCSessionDescriptionInit }) => {
+      // Initialize peerConnection when offer arrives if not already set
+      if (!peerConnection) {
+        const pc = new RTCPeerConnection({
+          iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
+        });
+        pc.onicecandidate = (event) => {
+          if (event.candidate && id) {
+            socket.emit('ice-candidate', { roomId: `rave-${id}`, candidate: event.candidate });
+          }
+        };
+        pc.ontrack = (event) => {
+          if (remoteVideoRef.current) remoteVideoRef.current.srcObject = event.streams[0];
+        };
+        setPeerConnection(pc);
+      }
       setIncomingCall(data);
     });
 
     socket.on('answer', (answer: RTCSessionDescriptionInit) => {
-      if (peerConnection) {
+      if (peerConnection && peerConnection.signalingState !== 'closed') {
         peerConnection.setRemoteDescription(new RTCSessionDescription(answer))
           .then(() => {
             setVideoChatActive(true);
@@ -114,11 +129,14 @@ const Rave: React.FC<RaveProps> = ({ user }) => {
             console.error('Error setting remote description:', error);
             setCallStatus(`Error connecting: ${error.message}`);
           });
+      } else {
+        console.error('Cannot set remote description: Peer connection is closed or null');
+        setCallStatus('Call setup failed: Connection closed.');
       }
     });
 
     socket.on('ice-candidate', (candidate: RTCIceCandidateInit) => {
-      if (peerConnection) {
+      if (peerConnection && peerConnection.signalingState !== 'closed') {
         peerConnection.addIceCandidate(new RTCIceCandidate(candidate)).catch((err) =>
           console.error('ICE candidate error:', err)
         );
@@ -164,8 +182,8 @@ const Rave: React.FC<RaveProps> = ({ user }) => {
       socket.off('call-ignored');
       socket.off('call-cancelled');
       unsubscribe();
+      // Only clean up stream, not peerConnection, to avoid closing during signaling
       stopLocalStream();
-      if (peerConnection) peerConnection.close();
     };
   }, [user, id, navigate, isHost, peerConnection, declinedUsers]);
 
@@ -228,8 +246,8 @@ const Rave: React.FC<RaveProps> = ({ user }) => {
       setVideoChatActive(false);
       setIsCallPending(false);
       stopLocalStream();
-      if (peerConnection) {
-        peerConnection.close();
+      if (pc) {
+        pc.close();
         setPeerConnection(null);
       }
     }
@@ -265,33 +283,31 @@ const Rave: React.FC<RaveProps> = ({ user }) => {
       return;
     }
 
-    stopLocalStream();
-    if (peerConnection) peerConnection.close();
-
-    const pc = new RTCPeerConnection({
-      iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
-    });
-    setPeerConnection(pc);
-
-    pc.ontrack = (event) => {
-      if (remoteVideoRef.current) remoteVideoRef.current.srcObject = event.streams[0];
-    };
-
-    pc.onicecandidate = (event) => {
-      if (event.candidate && id) {
-        socket.emit('ice-candidate', { roomId: `rave-${id}`, candidate: event.candidate });
-      }
-    };
+    if (!peerConnection || peerConnection.signalingState === 'closed') {
+      console.warn('Peer connection is null or closed, reinitializing');
+      const pc = new RTCPeerConnection({
+        iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
+      });
+      pc.onicecandidate = (event) => {
+        if (event.candidate && id) {
+          socket.emit('ice-candidate', { roomId: `rave-${id}`, candidate: event.candidate });
+        }
+      };
+      pc.ontrack = (event) => {
+        if (remoteVideoRef.current) remoteVideoRef.current.srcObject = event.streams[0];
+      };
+      setPeerConnection(pc);
+    }
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
       localStreamRef.current = stream;
       if (localVideoRef.current) localVideoRef.current.srcObject = stream;
-      stream.getTracks().forEach((track) => pc.addTrack(track, stream));
+      stream.getTracks().forEach((track) => peerConnection!.addTrack(track, stream));
 
-      await pc.setRemoteDescription(new RTCSessionDescription(incomingCall.offer));
-      const answer = await pc.createAnswer();
-      await pc.setLocalDescription(answer);
+      await peerConnection!.setRemoteDescription(new RTCSessionDescription(incomingCall.offer));
+      const answer = await peerConnection!.createAnswer();
+      await peerConnection!.setLocalDescription(answer);
       socket.emit('answer', { roomId: `rave-${id}`, answer });
 
       setVideoChatActive(true);
@@ -302,8 +318,8 @@ const Rave: React.FC<RaveProps> = ({ user }) => {
       setCallStatus(`Failed to accept call: ${(err as Error).message}`);
       setVideoChatActive(false);
       stopLocalStream();
-      if (pc) {
-        pc.close();
+      if (peerConnection) {
+        peerConnection.close();
         setPeerConnection(null);
       }
     }
