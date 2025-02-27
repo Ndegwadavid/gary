@@ -1,3 +1,4 @@
+// client/src/pages/Room.tsx
 import { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { User } from 'firebase/auth';
@@ -7,9 +8,11 @@ import Player from '../components/Player';
 import Chat from '../components/Chat';
 import io from 'socket.io-client';
 
+// Updated Socket.IO URL to use Render in production
 const getSocketUrl = () => {
-  const host = window.location.hostname === 'localhost' ? 'localhost' : window.location.hostname;
-  return `http://${host}:5000`; // Use HTTP for local testing; switch to HTTPS in production
+  return process.env.NODE_ENV === 'production'
+    ? 'https://gary-server.onrender.com' // Render URL for production
+    : `http://${window.location.hostname}:5000`; // Local development
 };
 
 const socket = io(getSocketUrl(), { transports: ['websocket', 'polling'] });

@@ -8,9 +8,11 @@ import Player from '../components/Player';
 import Chat from '../components/Chat';
 import io from 'socket.io-client';
 
+// Socket.IO URL updated for Render deployment
 const getSocketUrl = () => {
-  const host = window.location.hostname === 'localhost' ? 'localhost' : window.location.hostname;
-  return `http://${host}:5000`;
+  return process.env.NODE_ENV === 'production'
+    ? 'https://gary-server.onrender.com' // Render URL for production
+    : `http://${window.location.hostname}:5000`; // Local development
 };
 
 const socket = io(getSocketUrl(), { transports: ['websocket', 'polling'] });
@@ -50,9 +52,10 @@ const Rave: React.FC<RaveProps> = ({ user }) => {
   const [searchResults, setSearchResults] = useState<Track[]>([]);
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
+  const localStreamRef = useRef<MediaStream | null>(null);
 
   useEffect(() => {
-    if (!user || !id || !/^[a-zAZ0-9]+$/.test(id)) {
+    if (!user || !id || !/^[a-zA-Z0-9]+$/.test(id)) {
       navigate('/');
       return;
     }
@@ -62,6 +65,13 @@ const Rave: React.FC<RaveProps> = ({ user }) => {
 
     socket.on('user-joined', ({ userId }: { userId: string }) => {
       if (!isHost) setIsHost(userId === socket.id);
+    });
+
+    socket.on('user-list', (users: { [key: string]: { roomId?: string; userName?: string } }) => {
+      const roomUsers = Object.entries(users)
+        .filter(([_, data]) => data.roomId === raveId)
+        .map(([userId, data]) => ({ id: userId, name: data.userName || 'Unknown' }));
+      setOnlineUsers(Array.from(new Map(roomUsers.map((u) => [u.id, u])).values()));
     });
 
     socket.on('track-changed', (track: Track) => {
@@ -89,28 +99,22 @@ const Rave: React.FC<RaveProps> = ({ user }) => {
       });
     });
 
-    socket.on('user-list', (users: { [key: string]: { roomId?: string; userName?: string } }) => {
-      const roomUsers = Object.entries(users)
-        .filter(([_, data]) => data.roomId === raveId)
-        .map(([userId, data]) => ({ id: userId, name: data.userName || 'Unknown' }));
-      setOnlineUsers(Array.from(new Map(roomUsers.map((u) => [u.id, u])).values()));
-    });
-
     socket.on('offer', (data: { from: string; offer: RTCSessionDescriptionInit }) => {
       setIncomingCall(data);
-      if (!peerConnection) {
-        const pc = new RTCPeerConnection({
-          iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
-        });
-        setPeerConnection(pc);
-      }
     });
 
     socket.on('answer', (answer: RTCSessionDescriptionInit) => {
       if (peerConnection) {
-        peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
-        setVideoChatActive(true);
-        setIsCallPending(false);
+        peerConnection.setRemoteDescription(new RTCSessionDescription(answer))
+          .then(() => {
+            setVideoChatActive(true);
+            setIsCallPending(false);
+            setCallStatus('Connected');
+          })
+          .catch((error) => {
+            console.error('Error setting remote description:', error);
+            setCallStatus(`Error connecting: ${error.message}`);
+          });
       }
     });
 
@@ -127,12 +131,14 @@ const Rave: React.FC<RaveProps> = ({ user }) => {
       setCallStatus(`${declinedUsers.concat(from).join(' and ')} declined your video call`);
       setVideoChatActive(false);
       setIsCallPending(false);
+      stopLocalStream();
       setPeerConnection(null);
     });
 
     socket.on('call-cancelled', () => {
       setIncomingCall(null);
       setCallStatus('Video call was cancelled by the initiator.');
+      stopLocalStream();
     });
 
     setDoc(doc(db, 'raves', id), { creator: user.uid, createdAt: Date.now() }, { merge: true });
@@ -140,42 +146,53 @@ const Rave: React.FC<RaveProps> = ({ user }) => {
     const unsubscribe = onSnapshot(doc(db, 'raves', id), (docSnap) => {
       if (docSnap.exists()) {
         const data = docSnap.data();
-        if (data.currentTrack) {
-          setCurrentTrack(data.currentTrack);
-        }
+        if (data.currentTrack) setCurrentTrack(data.currentTrack);
         if (data.messages) setMessages(data.messages);
       }
     });
 
     return () => {
       socket.off('user-joined');
+      socket.off('user-list');
       socket.off('track-changed');
       socket.off('play');
       socket.off('pause');
       socket.off('stop');
       socket.off('chat-message');
-      socket.off('user-list');
       socket.off('offer');
       socket.off('answer');
       socket.off('ice-candidate');
       socket.off('call-ignored');
       socket.off('call-cancelled');
       unsubscribe();
+      stopLocalStream();
       if (peerConnection) peerConnection.close();
     };
   }, [user, id, navigate, isHost, peerConnection, declinedUsers]);
 
+  const stopLocalStream = () => {
+    if (localStreamRef.current) {
+      localStreamRef.current.getTracks().forEach((track) => track.stop());
+      localStreamRef.current = null;
+      if (localVideoRef.current) localVideoRef.current.srcObject = null;
+      if (remoteVideoRef.current) remoteVideoRef.current.srcObject = null;
+    }
+  };
+
   const startVideoChat = async () => {
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      console.error('getUserMedia not supported in this browser/environment:', {
-        navigatorMediaDevices: !!navigator.mediaDevices,
-        getUserMedia: !!navigator.mediaDevices?.getUserMedia,
+      console.error('Media devices not supported:', {
+        hasNavigatorMediaDevices: !!navigator.mediaDevices,
+        hasGetUserMedia: !!navigator.mediaDevices?.getUserMedia,
       });
-      setCallStatus('Video chat is not supported in your browser.');
+      setCallStatus('Video chat is not supported. Please use a modern browser and ensure HTTPS.');
       return;
     }
 
     if (!user || !id) return;
+
+    stopLocalStream();
+    if (peerConnection) peerConnection.close();
 
     const pc = new RTCPeerConnection({
       iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
@@ -184,6 +201,7 @@ const Rave: React.FC<RaveProps> = ({ user }) => {
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      localStreamRef.current = stream;
       if (localVideoRef.current) localVideoRef.current.srcObject = stream;
       stream.getTracks().forEach((track) => pc.addTrack(track, stream));
 
@@ -203,62 +221,92 @@ const Rave: React.FC<RaveProps> = ({ user }) => {
 
       setVideoChatActive(true);
       setIsCallPending(true);
-      setCallStatus(null);
+      setCallStatus('Waiting for others to accept your call...');
       setDeclinedUsers([]);
-    } catch (err: unknown) {
-      const error = err as Error;
-      console.error('Error starting video chat:', error);
-      setCallStatus(`Failed to start video chat: ${error.message}`);
+    } catch (err) {
+      console.error('Error starting video chat:', err);
+      setCallStatus(`Failed to start video chat: ${(err as Error).message}`);
       setVideoChatActive(false);
       setIsCallPending(false);
+      stopLocalStream();
+      if (peerConnection) {
+        peerConnection.close();
+        setPeerConnection(null);
+      }
     }
   };
 
   const cancelCall = () => {
-    if (id && videoChatActive && isCallPending) {
+    if (id && (videoChatActive || isCallPending)) {
       socket.emit('call-cancelled', { roomId: `rave-${id}` });
       setVideoChatActive(false);
       setIsCallPending(false);
-      setPeerConnection(null);
+      stopLocalStream();
+      if (peerConnection) {
+        peerConnection.close();
+        setPeerConnection(null);
+      }
       setCallStatus('Video call cancelled.');
     }
   };
 
   const acceptCall = async () => {
-    if (!id || !user) {
-      console.error('Cannot accept call: missing id or user', { id, user });
-      return;
-    }
-    if (!incomingCall) {
-      console.error('Cannot accept call: no incoming call data', { incomingCall });
-      return;
-    }
-    if (!peerConnection) {
-      console.warn('peerConnection is null, initializing new connection');
-      const pc = new RTCPeerConnection({
-        iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      console.error('Media devices not supported:', {
+        hasNavigatorMediaDevices: !!navigator.mediaDevices,
+        hasGetUserMedia: !!navigator.mediaDevices?.getUserMedia,
       });
-      setPeerConnection(pc);
+      setCallStatus('Video chat is not supported. Please use a modern browser and ensure HTTPS.');
+      return;
     }
+
+    if (!id || !user || !incomingCall) {
+      console.error('Cannot accept call: missing required data', { id, user, incomingCall });
+      setCallStatus('Cannot accept call due to missing session data.');
+      return;
+    }
+
+    stopLocalStream();
+    if (peerConnection) peerConnection.close();
+
+    const pc = new RTCPeerConnection({
+      iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
+    });
+    setPeerConnection(pc);
+
+    pc.ontrack = (event) => {
+      if (remoteVideoRef.current) remoteVideoRef.current.srcObject = event.streams[0];
+    };
+
+    pc.onicecandidate = (event) => {
+      if (event.candidate && id) {
+        socket.emit('ice-candidate', { roomId: `rave-${id}`, candidate: event.candidate });
+      }
+    };
 
     try {
-      await peerConnection!.setRemoteDescription(new RTCSessionDescription(incomingCall.offer));
       const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      localStreamRef.current = stream;
       if (localVideoRef.current) localVideoRef.current.srcObject = stream;
-      stream.getTracks().forEach((track) => peerConnection!.addTrack(track, stream));
+      stream.getTracks().forEach((track) => pc.addTrack(track, stream));
 
-      const answer = await peerConnection!.createAnswer();
-      await peerConnection!.setLocalDescription(answer);
+      await pc.setRemoteDescription(new RTCSessionDescription(incomingCall.offer));
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
       socket.emit('answer', { roomId: `rave-${id}`, answer });
 
       setVideoChatActive(true);
       setIncomingCall(null);
-      setCallStatus(null);
-    } catch (err: unknown) {
-      const error = err as Error;
-      console.error('Error accepting call:', error);
-      setCallStatus(`Failed to accept call: ${error.message}`);
+      setCallStatus('Connecting...');
+    } catch (err) {
+      console.error('Error accepting call:', err);
+      setCallStatus(`Failed to accept call: ${(err as Error).message}`);
       setVideoChatActive(false);
+      stopLocalStream();
+      if (pc) {
+        pc.close();
+        setPeerConnection(null);
+      }
     }
   };
 
@@ -354,15 +402,23 @@ const Rave: React.FC<RaveProps> = ({ user }) => {
               Cancel Call
             </button>
           ) : (
-            <div className="flex justify-center gap-4">
-              <div>
-                <h3 className="text-lg font-semibold mb-2">Your Video</h3>
-                <video ref={localVideoRef} autoPlay muted className="w-64 h-48 rounded-lg" />
+            <div className="flex flex-col items-center">
+              <div className="flex justify-center gap-4 flex-wrap">
+                <div>
+                  <h3 className="text-lg font-semibold mb-2">Your Video</h3>
+                  <video ref={localVideoRef} autoPlay muted className="w-64 h-48 rounded-lg" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold mb-2">Partner's Video</h3>
+                  <video ref={remoteVideoRef} autoPlay className="w-64 h-48 rounded-lg" />
+                </div>
               </div>
-              <div>
-                <h3 className="text-lg font-semibold mb-2">Partner's Video</h3>
-                <video ref={remoteVideoRef} autoPlay className="w-64 h-48 rounded-lg" />
-              </div>
+              <button
+                onClick={cancelCall}
+                className="mt-4 bg-red-600 text-white p-2 rounded hover:bg-red-700 transition"
+              >
+                End Call
+              </button>
             </div>
           )
         ) : (
@@ -423,7 +479,12 @@ const Rave: React.FC<RaveProps> = ({ user }) => {
             </button>
           ))}
           <button
-            onClick={() => changeTrack({ audioUrl: 'https://prod-1.storage.jamendo.com/?trackid=143356&format=mp31', title: 'Sample Jamendo Track' })}
+            onClick={() =>
+              changeTrack({
+                audioUrl: 'https://prod-1.storage.jamendo.com/?trackid=143356&format=mp31',
+                title: 'Sample Jamendo Track',
+              })
+            }
             className="bg-blue-600 text-white p-2 rounded hover:bg-blue-700 transition"
           >
             Play Sample Jamendo Track
