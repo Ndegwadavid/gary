@@ -1,16 +1,31 @@
 // server/src/index.ts
 import express from 'express';
 import http from 'http';
+import https from 'https'; // For production HTTPS option
 import { Server, Socket } from 'socket.io';
 import dotenv from 'dotenv';
+import fs from 'fs'; // For reading certificates
 
 dotenv.config();
 
 const app = express();
+
+// Development: Use HTTP server
 const server = http.createServer(app);
+
+// Production HTTPS setup (commented out):
+/*
+const options = {
+  key: fs.readFileSync('/path/to/your-key.pem'), // Replace with your certificate paths
+  cert: fs.readFileSync('/path/to/your-cert.pem'),
+};
+const server = https.createServer(options, app);
+*/
+
 const io = new Server(server, {
   cors: {
-    origin: '*',
+    origin: '*', // Development: Allow all origins
+    // origin: 'https://yourdomain.com', // Production: Specify your frontend domain
     methods: ['GET', 'POST'],
   },
 });
@@ -52,22 +67,19 @@ io.on('connection', (socket: Socket) => {
     onlineUsers[socket.id] = { roomId, userName };
     socket.join(roomId);
     socket.to(roomId).emit('user-joined', { userId: socket.id, userName });
-    io.emit('user-list', onlineUsers);
+    io.to(roomId).emit('user-list', onlineUsers);
   });
 
   socket.on('play', ({ roomId, timestamp }: SyncData) => {
     socket.to(roomId).emit('play', timestamp);
-    io.emit('user-list', onlineUsers);
   });
 
   socket.on('pause', ({ roomId, timestamp }: SyncData) => {
     socket.to(roomId).emit('pause', timestamp);
-    io.emit('user-list', onlineUsers);
   });
 
   socket.on('stop', ({ roomId }: { roomId: string }) => {
     socket.to(roomId).emit('stop');
-    io.emit('user-list', onlineUsers);
   });
 
   socket.on('track-changed', ({ roomId, audioUrl, title, timestamp, isPlaying }: TrackData) => {
@@ -99,13 +111,25 @@ io.on('connection', (socket: Socket) => {
   });
 
   socket.on('disconnect', () => {
+    const user = onlineUsers[socket.id];
+    if (user?.roomId) {
+      delete onlineUsers[socket.id];
+      io.to(user.roomId).emit('user-list', onlineUsers); // Fixed: user.roomId is checked
+    }
     console.log('User disconnected:', socket.id);
-    delete onlineUsers[socket.id];
-    io.emit('user-list', onlineUsers);
   });
 
-  io.emit('user-list', onlineUsers);
+  // Initial user list broadcast to the specific room
+  const userRoomId = onlineUsers[socket.id]?.roomId;
+  if (userRoomId) {
+    io.to(userRoomId).emit('user-list', onlineUsers); // Fixed: Check for undefined
+  }
 });
 
 const PORT = process.env.PORT || 5000;
 server.listen({ port: PORT, host: '0.0.0.0' }, () => console.log(`Server running on port ${PORT}`));
+
+// Production HTTPS listen (commented out):
+/*
+server.listen(PORT, () => console.log(`Server running on https://yourdomain.com:${PORT}`));
+*/
