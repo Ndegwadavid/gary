@@ -8,8 +8,7 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-    "lib": ["es6", "DOM"],
-    "types": ["node", "express", "socket.io"]
+    "lib": ["es6", "DOM"]
   },
   "include": ["src"],
   "exclude": ["node_modules"]
