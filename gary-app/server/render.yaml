@@ -1,16 +1,14 @@
-# render.yaml for gary-app/server
+# server/render.yaml
 services:
   - type: web
     name: gary-server
     env: node
-    region: oregon # Choose your preferred region (e.g., oregon, frankfurt)
-    plan: free # Free tier for testing
-    branch: main # Your Git branch
-    rootDir: . # Root directory containing package.json
-    buildCommand: npm install
+    region: oregon
+    plan: free
+    branch: main
+    buildCommand: npm install && tsc --project tsconfig.json
     startCommand: npm start
-    autoDeploy: true # Automatically deploy on git push
-    healthCheckPath: / # Optional: Render pings this path (not critical for Socket.IO)
+    autoDeploy: true
     envVars:
       - key: NODE_ENV
         value: production
