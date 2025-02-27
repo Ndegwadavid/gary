@@ -8,7 +8,8 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-    "lib": ["es6", "DOM"] // Add DOM for WebRTC types
+    "lib": ["es6", "DOM"],
+    "types": ["node", "express", "socket.io"]
   },
   "include": ["src"],
   "exclude": ["node_modules"]
