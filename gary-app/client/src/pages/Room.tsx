@@ -11,12 +11,11 @@ import io from 'socket.io-client';
 // Updated Socket.IO URL to use Render in production
 const getSocketUrl = () => {
   return process.env.NODE_ENV === 'production'
-    ? 'https://gary-server.onrender.com' // Render URL for production
-    : `http://${window.location.hostname}:5000`; // Local development
+    ? 'https://gary-server.onrender.com' // Secure WebSocket via HTTPS
+    : 'http://localhost:5000'; // Local development (HTTP for simplicity)
 };
 
 const socket = io(getSocketUrl(), { transports: ['websocket', 'polling'] });
-
 interface RoomProps {
   user: User | null;
 }
