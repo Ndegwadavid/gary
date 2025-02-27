@@ -1,4 +1,3 @@
-// server/src/index.ts
 import express from 'express';
 import http from 'http';
 import https from 'https'; // For production HTTPS option
