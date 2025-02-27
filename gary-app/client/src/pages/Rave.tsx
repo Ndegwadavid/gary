@@ -11,7 +11,7 @@ import io from 'socket.io-client';
 const getSocketUrl = () => {
   return process.env.NODE_ENV === 'production'
     ? 'https://gary-server.onrender.com' // Render URL for production
-    : 'http://localhost:5000'; // Local development
+    : 'http://localhost:5000'; 
 };
 
 const socket = io(getSocketUrl(), { transports: ['websocket', 'polling'] });
