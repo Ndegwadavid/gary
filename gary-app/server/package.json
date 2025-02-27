@@ -4,9 +4,9 @@
   "description": "Server for Gary app - real-time music sync and chat",
   "main": "dist/index.js",
   "scripts": {
-    "start": "node dist/index.js",      
-    "build": "tsc",                      
-    "dev": "nodemon src/index.ts",       
+    "start": "node dist/index.js",
+    "build": "tsc",
+    "dev": "nodemon src/index.ts",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [
@@ -21,13 +21,13 @@
     "express": "^4.21.2",
     "socket.io": "^4.8.1",
     "dotenv": "^16.4.7",
-    "typescript": "^5.7.3",            
-    "@types/express": "^5.0.0",          
-    "@types/node": "^22.13.5",           
-    "@types/socket.io": "^3.0.2"  
+    "typescript": "^5.7.3",
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.13.5",
+    "@types/socket.io": "^3.0.2"
   },
   "devDependencies": {
-    "nodemon": "^3.1.9",                
-    "ts-node": "^10.9.2"                
+    "nodemon": "^3.1.9",
+    "ts-node": "^10.9.2"
   }
 }
