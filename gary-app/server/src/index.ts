@@ -1,4 +1,3 @@
-// server/src/index.ts
 import express from 'express';
 import http from 'http';
 import https from 'https'; // For production HTTPS option
@@ -24,8 +23,7 @@ const server = https.createServer(options, app);
 
 const io = new Server(server, {
   cors: {
-    origin: '*', // Development: Allow all origins
-    // origin: 'https://yourdomain.com', // Production: Specify your frontend domain
+    origin: 'https://gary-client.vercel.app',
     methods: ['GET', 'POST'],
   },
 });
