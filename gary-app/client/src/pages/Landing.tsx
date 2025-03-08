@@ -1,138 +1,315 @@
-"use client"
+"use client";
 
-import type React from "react"
+import React, { useEffect, useState, useRef } from "react";
+import { User } from "firebase/auth";
+import { Music, Headphones, ArrowRight, Search, Play, Pause } from "lucide-react";
+import AuthComponent from "../components/Auth";
+import { Button } from "../components/ui/button";
+import { Card, CardContent } from "../components/ui/card";
+import { Input } from "../components/ui/input";
+import Sidebar from "../components/Sidebar";
 
-import { useEffect, useState } from "react"
-import type { User } from "firebase/auth"
-import { Music, Headphones, ArrowRight } from "lucide-react"
-import Player from "../components/Player"
-import AuthComponent from "../components/Auth"
-import { Button } from "../components/ui/button"
-import { Card, CardContent } from "../components/ui/card"
 
 interface Track {
-  id: string
-  title: string
-  audioUrl?: string
+  id: string;
+  title: string;
+  thumbnail: string;
+  videoId: string;
+  audioUrl?: string; // Simulated for demo; requires server in production
 }
 
 interface LandingProps {
-  user: User | null
+  user: User | null;
 }
 
-const Landing: React.FC<LandingProps> = ({ user }) => {
-  const [tracks, setTracks] = useState<Track[]>([])
-  const [showAuth, setShowAuth] = useState(false)
-  const [isLoading, setIsLoading] = useState(true)
+const CustomAudioPlayer: React.FC<{ track: Track; isPlaying: boolean; onTogglePlay: () => void }> = ({
+  track,
+  isPlaying,
+  onTogglePlay,
+}) => {
+  const audioRef = useRef<HTMLAudioElement>(null);
 
   useEffect(() => {
-    setIsLoading(true)
-    fetch(
-      `https://api.jamendo.com/v3.0/tracks/?client_id=${process.env.REACT_APP_JAMENDO_CLIENT_ID}&format=json&limit=5&order=downloads_total`,
-    )
-      .then((res) => res.json())
-      .then((jamendoData) => {
-        const jamendoTracks = jamendoData.results.map((track: any) => ({
-          id: track.id,
-          title: track.name,
-          audioUrl: track.audio,
-        }))
-        setTracks(jamendoTracks)
-        setIsLoading(false)
-      })
-      .catch((err) => {
-        console.error("Jamendo fetch failed:", err)
-        setIsLoading(false)
-      })
-  }, [])
-
-  const handleLoginClick = () => {
-    setShowAuth(true)
-  }
+    if (audioRef.current) {
+      if (isPlaying) {
+        audioRef.current.play().catch((err) => console.error("Audio play failed:", err));
+      } else {
+        audioRef.current.pause();
+      }
+    }
+  }, [isPlaying]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-background to-secondary/20">
-      <div className="container mx-auto px-4 py-12 max-w-6xl">
-        {/* Hero Section */}
-        <div className="text-center space-y-6 mb-16 animate-fade-in">
-          <div className="inline-block p-3 bg-primary/10 rounded-full mb-4">
-            <Music className="h-8 w-8 text-primary" />
-          </div>
-          <h1 className="text-5xl md:text-6xl font-bold tracking-tight">
-            Share the Beat, <span className="text-primary">Feel the Moment</span>
-          </h1>
-          <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-            Experience music together in real-time. Create rooms, invite friends, and enjoy synchronized listening.
-          </p>
-
-          {!user ? (
-            <Button size="lg" onClick={handleLoginClick} className="mt-8 px-8 rounded-full">
-              Get Started <ArrowRight className="ml-2 h-4 w-4" />
-            </Button>
-          ) : (
-            <Button size="lg" onClick={() => (window.location.href = "/me")} className="mt-8 px-8 rounded-full">
-              Go to Dashboard <ArrowRight className="ml-2 h-4 w-4" />
-            </Button>
-          )}
+    <div className="w-full mt-4 relative">
+      <audio ref={audioRef} src={track.audioUrl} />
+      <div className="flex items-center justify-between">
+        <Button
+          size="sm"
+          variant="outline"
+          className="rounded-full"
+          onClick={onTogglePlay}
+        >
+          {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+        </Button>
+        <div className="flex-1 flex justify-around items-center">
+          <span className={`h-8 w-1 bg-primary ${isPlaying ? "animate-pulse" : ""}`}></span>
+          <span className={`h-12 w-1 bg-accent ${isPlaying ? "animate-pulse delay-100" : ""}`}></span>
+          <span className={`h-10 w-1 bg-primary ${isPlaying ? "animate-pulse delay-200" : ""}`}></span>
         </div>
+      </div>
+    </div>
+  );
+};
 
-        {/* Featured Tracks Section */}
-        <div className="mt-16">
-          <div className="flex items-center mb-8">
-            <Headphones className="mr-2 h-5 w-5 text-primary" />
-            <h2 className="text-2xl font-semibold">Featured Tracks</h2>
+const Landing: React.FC<LandingProps> = ({ user }) => {
+  const [trendingTracks, setTrendingTracks] = useState<Track[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<Track[]>([]);
+  const [showAuth, setShowAuth] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [playingTrackId, setPlayingTrackId] = useState<string | null>(null);
+
+  // Caching with localStorage
+  const cacheKey = "trendingTracks";
+  useEffect(() => {
+    const cachedTracks = localStorage.getItem(cacheKey);
+    if (cachedTracks) {
+      setTrendingTracks(JSON.parse(cachedTracks));
+      setIsLoading(false);
+      return;
+    }
+
+    setIsLoading(true);
+    fetch(
+      `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&videoCategoryId=10&maxResults=6&order=viewCount&key=${process.env.REACT_APP_YOUTUBE_API_KEY}`
+    )
+      .then((res) => res.json())
+      .then((data) => {
+        const tracks = data.items.map((item: any) => ({
+          id: item.id.videoId,
+          title: item.snippet.title,
+          thumbnail: item.snippet.thumbnails.high.url,
+          videoId: item.id.videoId,
+          audioUrl: `https://example.com/audio/${item.id.videoId}.mp3`, // Placeholder; requires server-side extraction
+        }));
+        setTrendingTracks(tracks);
+        localStorage.setItem(cacheKey, JSON.stringify(tracks));
+        setIsLoading(false);
+      })
+      .catch((err) => {
+        console.error("YouTube fetch failed:", err);
+        setIsLoading(false);
+      });
+  }, []);
+
+  // Search YouTube videos
+  const handleSearch = () => {
+    if (!searchQuery) return;
+    setIsLoading(true);
+    fetch(
+      `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&videoCategoryId=10&maxResults=6&q=${encodeURIComponent(
+        searchQuery
+      )}&key=${process.env.REACT_APP_YOUTUBE_API_KEY}`
+    )
+      .then((res) => res.json())
+      .then((data) => {
+        const tracks = data.items.map((item: any) => ({
+          id: item.id.videoId,
+          title: item.snippet.title,
+          thumbnail: item.snippet.thumbnails.high.url,
+          videoId: item.id.videoId,
+          audioUrl: `https://example.com/audio/${item.id.videoId}.mp3`, // Placeholder
+        }));
+        setSearchResults(tracks);
+        setIsLoading(false);
+      })
+      .catch((err) => {
+        console.error("YouTube search failed:", err);
+        setIsLoading(false);
+      });
+  };
+
+  const handleLoginClick = () => setShowAuth(true);
+
+  const togglePlay = (trackId: string) => {
+    setPlayingTrackId(playingTrackId === trackId ? null : trackId);
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-b from-background to-secondary/10 text-foreground overflow-x-hidden">
+      {/* Fixed Search Header */}
+      <header className="fixed top-0 left-0 right-0 z-50 bg-background/90 backdrop-blur-md border-b border-border/40 md:ml-[18rem]">
+        <div className="container mx-auto px-4 py-4 flex flex-col sm:flex-row items-center justify-between gap-4 max-w-6xl">
+          <div className="flex items-center gap-2">
+            <Music className="h-6 w-6 text-primary animate-spin-slow" />
+            <span className="text-xl font-bold gradient-text">Gary Music</span>
           </div>
+          <div className="flex-1 w-full sm:w-auto max-w-xl">
+            <div className="relative">
+              <Input
+                type="text"
+                placeholder="Search songs, artists, or vibes..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyPress={(e) => e.key === "Enter" && handleSearch()}
+                className="w-full pr-12 py-2 text-base rounded-full glass border-primary/30 focus:ring-2 focus:ring-primary shadow-md"
+              />
+              <Button
+                size="icon"
+                onClick={handleSearch}
+                className="absolute right-1 top-1/2 -translate-y-1/2 rounded-full bg-primary hover:bg-primary/90"
+              >
+                <Search className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+          <Button
+            size="sm"
+            onClick={user ? () => (window.location.href = "/me") : handleLoginClick}
+            className="rounded-full shadow-md hover:scale-105 transition-transform"
+          >
+            {user ? "Dashboard" : "Login"}
+          </Button>
+        </div>
+      </header>
 
-          <div className="grid gap-4">
+      {/* Main Content */}
+      <div className="pt-24 md:pt-28">
+        {/* Hero Section */}
+        <section className="relative h-[50vh] md:h-[60vh] flex items-center justify-center text-center bg-gradient-to-br from-primary/20 via-background to-accent/20">
+          <div className="absolute inset-0 z-0 overflow-hidden">
+            <video
+              autoPlay
+              loop
+              muted
+              className="w-full h-full object-cover opacity-20"
+            >
+              <source src="https://cdn.pixabay.com/video/2023/08/23/176391-856795693_tiny.mp4" type="video/mp4" />
+            </video>
+            <div className="absolute inset-0 bg-black/60"></div>
+          </div>
+          <div className="relative z-10 space-y-6 px-4">
+            <h1 className="text-4xl sm:text-5xl md:text-6xl font-extrabold tracking-tight animate-fade-in">
+              <span className="gradient-text">Pulse of the Future</span>
+            </h1>
+            <p className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto">
+              Unleash your music universe—search, play, and sync with friends in real-time.
+            </p>
+            <Button
+              size="lg"
+              onClick={user ? () => (window.location.href = "/rooms") : handleLoginClick}
+              className="px-8 py-5 text-lg rounded-full shadow-lg hover:scale-105 transition-transform bg-gradient-to-r from-primary to-accent"
+            >
+              {user ? "Create Room" : "Start Vibing"} <ArrowRight className="ml-2 h-5 w-5" />
+            </Button>
+          </div>
+        </section>
+
+        {/* Search Results */}
+        {searchResults.length > 0 && (
+          <section className="container mx-auto px-4 py-8 max-w-6xl">
+            <h2 className="text-2xl md:text-3xl font-semibold mb-6 flex items-center">
+              <Headphones className="mr-2 h-6 w-6 text-primary animate-spin-slow" />
+              Your Search
+            </h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              {searchResults.map((track) => (
+                <Card
+                  key={track.id}
+                  className="bg-card/70 glass hover:bg-card/90 transition-all duration-300 border-primary/30 shadow-lg hover:shadow-xl hover:scale-105 relative overflow-hidden"
+                >
+                  <CardContent className="p-4 flex flex-col items-center">
+                    <img
+                      src={track.thumbnail}
+                      alt={track.title}
+                      className="w-full h-40 object-cover rounded-lg mb-4 shadow-md"
+                    />
+                    <span className="font-medium text-center truncate w-full text-foreground">
+                      {track.title}
+                    </span>
+                    <CustomAudioPlayer
+                      track={track}
+                      isPlaying={playingTrackId === track.id}
+                      onTogglePlay={() => togglePlay(track.id)}
+                    />
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* Trending Tracks */}
+        <section className="container mx-auto px-4 py-8 max-w-6xl">
+          <h2 className="text-2xl md:text-3xl font-semibold mb-6 flex items-center">
+            <Headphones className="mr-2 h-6 w-6 text-primary animate-spin-slow" />
+            Trending Vibes
+          </h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {isLoading
-              ? // Loading skeleton
-                Array(5)
+              ? Array(6)
                   .fill(0)
                   .map((_, i) => (
-                    <Card key={i} className="bg-card/50 backdrop-blur-sm">
-                      <CardContent className="p-4 flex items-center">
-                        <div className="h-10 w-10 rounded-full bg-muted animate-pulse"></div>
-                        <div className="ml-4 h-4 w-48 bg-muted animate-pulse rounded"></div>
+                    <Card key={i} className="bg-card/70 glass shadow-lg">
+                      <CardContent className="p-4 flex flex-col items-center">
+                        <div className="h-40 w-full bg-muted animate-pulse rounded-lg mb-4"></div>
+                        <div className="h-4 w-48 bg-muted animate-pulse rounded"></div>
                       </CardContent>
                     </Card>
                   ))
-              : tracks.map((track) => (
+              : trendingTracks.map((track) => (
                   <Card
                     key={track.id}
-                    className="bg-card/50 backdrop-blur-sm hover:bg-card/80 transition-all duration-300 border-primary/10"
+                    className="bg-card/70 glass hover:bg-card/90 transition-all duration-300 border-primary/30 shadow-lg hover:shadow-xl hover:scale-105 relative overflow-hidden"
                   >
-                    <CardContent className="p-4 flex items-center">
-                      <div className="bg-primary/10 rounded-full p-2 mr-4">
-                        <Player audioUrl={track.audioUrl} />
-                      </div>
-                      <span className="font-medium">{track.title}</span>
+                    <CardContent className="p-4 flex flex-col items-center">
+                      <img
+                        src={track.thumbnail}
+                        alt={track.title}
+                        className="w-full h-40 object-cover rounded-lg mb-4 shadow-md"
+                      />
+                      <span className="font-medium text-center truncate w-full text-foreground">
+                        {track.title}
+                      </span>
+                      <CustomAudioPlayer
+                        track={track}
+                        isPlaying={playingTrackId === track.id}
+                        onTogglePlay={() => togglePlay(track.id)}
+                      />
                     </CardContent>
                   </Card>
                 ))}
           </div>
+        </section>
 
-          <div className="mt-8 text-center">
-            <p className="text-muted-foreground mb-4">Want to listen together with friends?</p>
-            {!user && (
-              <Button variant="outline" onClick={handleLoginClick} className="rounded-full">
-                Login / Sign Up
-              </Button>
-            )}
+        {/* Call to Action */}
+        <section className="bg-gradient-to-r from-primary/20 to-accent/20 py-12 text-center">
+          <div className="container mx-auto px-4 max-w-6xl">
+            <h2 className="text-2xl md:text-3xl font-bold mb-4 gradient-text">Amplify Your Sound</h2>
+            <p className="text-lg text-muted-foreground mb-6">
+              Join the sonic revolution—sync, share, and vibe with the world.
+            </p>
+            <Button
+              size="lg"
+              onClick={user ? () => (window.location.href = "/rooms") : handleLoginClick}
+              className="px-8 py-5 text-lg rounded-full shadow-lg hover:scale-105 transition-transform bg-gradient-to-r from-primary to-accent"
+            >
+              {user ? "Start a Room" : "Join Now"} <ArrowRight className="ml-2 h-5 w-5" />
+            </Button>
           </div>
-        </div>
-      </div>
+        </section>
 
-      {/* Footer */}
-      <footer className="mt-24 py-6 border-t border-border/40 text-center text-sm text-muted-foreground">
-        <div className="container mx-auto">
-          <p>© {new Date().getFullYear()} Gary App. All rights reserved.</p>
-        </div>
-      </footer>
+        {/* Footer */}
+        <footer className="py-6 border-t border-border/40 text-center text-sm text-muted-foreground">
+          <div className="container mx-auto px-4 max-w-6xl">
+            <p>© {new Date().getFullYear()} Gary App. All rights reserved.</p>
+          </div>
+        </footer>
+      </div>
 
       {showAuth && <AuthComponent onClose={() => setShowAuth(false)} />}
     </div>
-  )
-}
+  );
+};
 
-export default Landing
-
+export default Landing;
