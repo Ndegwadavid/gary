@@ -15,7 +15,7 @@ interface Track {
   title: string;
   thumbnail: string;
   videoId: string;
-  audioUrl?: string; // Simulated for demo; requires server in production
+  audioUrl?: string;
 }
 
 interface LandingProps {
@@ -193,7 +193,7 @@ const Landing: React.FC<LandingProps> = ({ user }) => {
               <span className="gradient-text">Pulse of the Future</span>
             </h1>
             <p className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto">
-              Unleash your music universe—search, play, and sync with friends in real-time.
+              Unleash your music universe—search, play, and sync with your lover and friends in real-time.
             </p>
             <Button
               size="lg"
