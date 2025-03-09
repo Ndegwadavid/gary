@@ -1,26 +1,12 @@
 import express from 'express';
 import http from 'http';
-import https from 'https'; // For production HTTPS option
 import { Server, Socket } from 'socket.io';
 import dotenv from 'dotenv';
-import fs from 'fs'; // For reading certificates
 
 dotenv.config();
 
 const app = express();
-
-// Development: Use HTTP server
 const server = http.createServer(app);
-
-// Production HTTPS setup (commented out):
-/*
-const options = {
-  key: fs.readFileSync('/path/to/your-key.pem'), // Replace with your certificate paths
-  cert: fs.readFileSync('/path/to/your-cert.pem'),
-};
-const server = https.createServer(options, app);
-*/
-
 const io = new Server(server, {
   cors: {
     origin: 'https://gary-client.vercel.app',
@@ -35,10 +21,13 @@ interface SyncData {
 
 interface TrackData {
   roomId: string;
-  audioUrl?: string;
-  title?: string;
-  timestamp?: number;
-  isPlaying?: boolean;
+  track: {
+    audioUrl?: string;
+    title?: string;
+    timestamp?: number;
+    isPlaying?: boolean;
+    source?: "youtube" | "jamendo";
+  };
 }
 
 interface ChatMessage {
@@ -48,44 +37,94 @@ interface ChatMessage {
 
 interface JoinData {
   roomId: string;
+  userId: string;
   userName: string;
+}
+
+interface TypingData {
+  roomId: string;
+  userId: string;
 }
 
 interface UserData {
   roomId?: string;
   userName?: string;
+  uid?: string;
+}
+
+interface RoomState {
+  currentTrack: {
+    audioUrl?: string;
+    title?: string;
+    timestamp?: number;
+    isPlaying?: boolean;
+    source?: "youtube" | "jamendo";
+  };
 }
 
 const onlineUsers: { [key: string]: UserData } = {};
+const rooms: { [key: string]: RoomState } = {};
 
 io.on('connection', (socket: Socket) => {
   console.log('User connected:', socket.id);
 
-  socket.on('join-room', ({ roomId, userName }: JoinData) => {
-    onlineUsers[socket.id] = { roomId, userName };
+  socket.on('join-room', ({ roomId, userId, userName }: JoinData) => {
     socket.join(roomId);
-    socket.to(roomId).emit('user-joined', { userId: socket.id, userName });
+    onlineUsers[socket.id] = { roomId, userName, uid: userId };
+    socket.to(roomId).emit('user-joined', { userId, userName });
+    io.to(roomId).emit('user-list', onlineUsers);
+
+    // Send current room state to the new user
+    if (rooms[roomId]?.currentTrack) {
+      socket.emit('track-changed', rooms[roomId].currentTrack);
+      if (rooms[roomId].currentTrack.isPlaying) {
+        socket.emit('play', rooms[roomId].currentTrack.timestamp || 0);
+      } else {
+        socket.emit('pause', rooms[roomId].currentTrack.timestamp || 0);
+      }
+    }
+  });
+
+  socket.on('request-user-list', ({ roomId }: { roomId: string }) => {
     io.to(roomId).emit('user-list', onlineUsers);
   });
 
   socket.on('play', ({ roomId, timestamp }: SyncData) => {
+    if (rooms[roomId]) {
+      rooms[roomId].currentTrack.timestamp = timestamp;
+      rooms[roomId].currentTrack.isPlaying = true;
+    }
     socket.to(roomId).emit('play', timestamp);
   });
 
   socket.on('pause', ({ roomId, timestamp }: SyncData) => {
+    if (rooms[roomId]) {
+      rooms[roomId].currentTrack.timestamp = timestamp;
+      rooms[roomId].currentTrack.isPlaying = false;
+    }
     socket.to(roomId).emit('pause', timestamp);
   });
 
   socket.on('stop', ({ roomId }: { roomId: string }) => {
+    if (rooms[roomId]) {
+      rooms[roomId].currentTrack.timestamp = 0;
+      rooms[roomId].currentTrack.isPlaying = false;
+    }
     socket.to(roomId).emit('stop');
   });
 
-  socket.on('track-changed', ({ roomId, audioUrl, title, timestamp, isPlaying }: TrackData) => {
-    socket.to(roomId).emit('track-changed', { audioUrl, title, timestamp, isPlaying });
+  socket.on('track-changed', ({ roomId, track }: TrackData) => {
+    rooms[roomId] = rooms[roomId] || { currentTrack: {} };
+    rooms[roomId].currentTrack = { ...track };
+    io.to(roomId).emit('track-changed', track);
   });
 
   socket.on('chat-message', ({ roomId, message }: ChatMessage) => {
     io.to(roomId).emit('chat-message', message);
+  });
+
+  socket.on('typing', ({ roomId, userId }: TypingData) => {
+    socket.to(roomId).emit('typing', { userId });
   });
 
   socket.on('offer', ({ roomId, offer, from }: { roomId: string; offer: RTCSessionDescriptionInit; from: string }) => {
@@ -108,25 +147,31 @@ io.on('connection', (socket: Socket) => {
     socket.to(roomId).emit('call-cancelled');
   });
 
+  socket.on('leave-room', ({ roomId, userId }: { roomId: string; userId: string }) => {
+    socket.leave(roomId);
+    delete onlineUsers[socket.id];
+    io.to(roomId).emit('user-list', onlineUsers);
+    // Optionally clear room state if no users remain
+    if (!Object.values(onlineUsers).some(user => user.roomId === roomId)) {
+      delete rooms[roomId];
+    }
+  });
+
   socket.on('disconnect', () => {
     const user = onlineUsers[socket.id];
     if (user?.roomId) {
       delete onlineUsers[socket.id];
-      io.to(user.roomId).emit('user-list', onlineUsers); // Fixed: user.roomId is checked
+      io.to(user.roomId).emit('user-list', onlineUsers);
+      if (!Object.values(onlineUsers).some(u => u.roomId === user.roomId)) {
+        delete rooms[user.roomId];
+      }
     }
     console.log('User disconnected:', socket.id);
   });
-
-  // Initial user list broadcast to the specific room
-  const userRoomId = onlineUsers[socket.id]?.roomId;
-  if (userRoomId) {
-    io.to(userRoomId).emit('user-list', onlineUsers); // Fixed: Check for undefined
-  }
 });
 
 const PORT = process.env.PORT || 5000;
 server.listen({ port: PORT, host: '0.0.0.0' }, () => console.log(`Server running on port ${PORT}`));
-
 // Production HTTPS listen (commented out):
 /*
 server.listen(PORT, () => console.log(`Server running on https://yourdomain.com:${PORT}`));
