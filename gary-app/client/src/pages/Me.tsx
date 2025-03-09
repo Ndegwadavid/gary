@@ -6,9 +6,10 @@ import { User } from 'firebase/auth'
 import { auth, db } from '../firebase'
 import { useState, useEffect } from 'react'
 import { collection, query, where, onSnapshot } from 'firebase/firestore'
-import { Music, PlusCircle, LogOut, Layers, ArrowRight, Copy, Sparkles, Users } from 'lucide-react'
+import { Music, PlusCircle, LogOut, ArrowRight, Sparkles, Users } from 'lucide-react'
+import { toast } from 'sonner' // Keep sonner for a success toast
 
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '../components/ui/card'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
 import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
 import { Separator } from '../components/ui/separator'
@@ -46,7 +47,16 @@ const Me: React.FC<MeProps> = ({ user }) => {
 
   const createRoom = () => {
     setIsLoading(true)
-    const roomId = Math.random().toString(36).substring(7)
+    const roomId = Math.random().toString(36).substring(7) // Random 6-char ID
+    toast.success(
+      <div className="flex items-center gap-2 bg-green-500/10 backdrop-blur-md border border-green-500/20 rounded-lg p-4 shadow-lg text-green-100">
+        <svg className="w-5 h-5 animate-bounce" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+        </svg>
+        <span className="font-semibold">Room "{roomId}" created!</span>
+      </div>,
+      { duration: 3000 }
+    )
     navigate(`/room/${roomId}`)
   }
 
@@ -62,30 +72,14 @@ const Me: React.FC<MeProps> = ({ user }) => {
       setIsLoading(true)
       navigate(`/rave/${raveIdInput.trim()}`)
     } else {
-      alert('Rave ID must contain only letters and numbers.')
+      toast.error("Rave ID must contain only letters and numbers.")
     }
   }
 
-  // Get user initials for avatar
   const getUserInitials = () => {
     if (!user) return '?'
-    
-    if (user.displayName) {
-      return user.displayName
-        .split(' ')
-        .map(part => part.charAt(0))
-        .join('')
-        .toUpperCase()
-        .substring(0, 2)
-    }
-    
-    if (user.email) {
-      return user.email
-        .split('@')[0]
-        .substring(0, 2)
-        .toUpperCase()
-    }
-    
+    if (user.displayName) return user.displayName.split(' ').map(part => part.charAt(0)).join('').toUpperCase().substring(0, 2)
+    if (user.email) return user.email.split('@')[0].substring(0, 2).toUpperCase()
     return user.uid.substring(0, 2).toUpperCase()
   }
 
@@ -95,9 +89,7 @@ const Me: React.FC<MeProps> = ({ user }) => {
         {/* User Welcome */}
         <div className="flex flex-col items-center mb-12">
           <Avatar className="h-20 w-20 mb-4 bg-primary text-primary-foreground">
-            <AvatarFallback className="text-xl font-semibold">
-              {getUserInitials()}
-            </AvatarFallback>
+            <AvatarFallback className="text-xl font-semibold">{getUserInitials()}</AvatarFallback>
           </Avatar>
           <h1 className="text-3xl md:text-4xl font-bold text-center">
             Welcome, {user.displayName || user.email?.split('@')[0] || 'Music Lover'}!
@@ -115,28 +107,26 @@ const Me: React.FC<MeProps> = ({ user }) => {
                 <Music className="h-5 w-5 text-primary mr-2" />
                 Music Rooms
               </CardTitle>
-              <CardDescription>
-                Create a new room or join an existing one
-              </CardDescription>
+              <CardDescription>Create a new room or join an existing one</CardDescription>
             </CardHeader>
             <Separator />
             <CardContent className="pt-6 space-y-4">
-              <Button 
-                onClick={createRoom} 
+              <Button
+                onClick={createRoom}
                 className="w-full flex items-center justify-center gap-2"
                 disabled={isLoading}
               >
                 <PlusCircle className="h-4 w-4" />
                 Create a New Room
               </Button>
-              
+
               <div className="relative">
                 <Separator className="absolute left-0 right-0 top-1/2" />
                 <div className="relative flex justify-center">
                   <span className="bg-card px-2 text-xs text-muted-foreground">OR JOIN EXISTING</span>
                 </div>
               </div>
-              
+
               <div className="space-y-2">
                 <Input
                   type="text"
@@ -145,9 +135,9 @@ const Me: React.FC<MeProps> = ({ user }) => {
                   placeholder="Enter Room ID"
                   className="w-full"
                 />
-                <Button 
-                  onClick={joinRoom} 
-                  variant="secondary" 
+                <Button
+                  onClick={joinRoom}
+                  variant="secondary"
                   className="w-full"
                   disabled={!roomIdInput.trim() || isLoading}
                 >
@@ -165,9 +155,7 @@ const Me: React.FC<MeProps> = ({ user }) => {
                 <Sparkles className="h-5 w-5 text-primary mr-2" />
                 Rave Experience
               </CardTitle>
-              <CardDescription>
-                Join or create a rave with video chat
-              </CardDescription>
+              <CardDescription>Join or create a rave with video chat</CardDescription>
             </CardHeader>
             <Separator />
             <CardContent className="pt-6 space-y-4">
@@ -179,9 +167,9 @@ const Me: React.FC<MeProps> = ({ user }) => {
                   placeholder="Enter Rave ID (letters/numbers only)"
                   className="w-full"
                 />
-                <Button 
-                  onClick={createOrJoinRave} 
-                  variant="default" 
+                <Button
+                  onClick={createOrJoinRave}
+                  variant="default"
                   className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700"
                   disabled={!raveIdInput.trim() || !/^[a-zA-Z0-9]+$/.test(raveIdInput.trim()) || isLoading}
                 >
@@ -189,14 +177,13 @@ const Me: React.FC<MeProps> = ({ user }) => {
                   Create/Join Rave
                 </Button>
               </div>
-              
+
               {/* My Raves Section */}
               <div className="mt-6">
                 <h3 className="text-sm font-medium mb-3 flex items-center">
                   <Sparkles className="h-4 w-4 text-primary mr-2" />
                   My Raves
                 </h3>
-                
                 {isLoading ? (
                   <div className="space-y-2">
                     {[1, 2].map(i => (
@@ -229,18 +216,17 @@ const Me: React.FC<MeProps> = ({ user }) => {
 
         {/* Bottom Actions */}
         <div className="mt-8 flex flex-col sm:flex-row gap-4 justify-center">
-          <Button 
-            onClick={() => navigate('/rooms')} 
-            variant="outline" 
+          <Button
+            onClick={() => navigate('/rooms')}
+            variant="outline"
             className="flex items-center gap-2"
           >
             <Users className="h-4 w-4" />
             View Public Rooms
           </Button>
-          
-          <Button 
-            onClick={() => auth.signOut()} 
-            variant="ghost" 
+          <Button
+            onClick={() => auth.signOut()}
+            variant="ghost"
             className="flex items-center gap-2 text-muted-foreground"
           >
             <LogOut className="h-4 w-4" />

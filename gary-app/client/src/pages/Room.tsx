@@ -6,6 +6,7 @@ import { useParams, useNavigate } from "react-router-dom"
 import type { User } from "firebase/auth"
 import { Music2, Users, Share2, ArrowLeft } from "lucide-react"
 import io from "socket.io-client"
+import { toast } from 'sonner'
 
 import Player from "../components/Player"
 import Chat from "../components/Chat"
@@ -40,7 +41,7 @@ interface RoomProps {
 }
 
 const Room: React.FC<RoomProps> = ({ user }) => {
-  const { roomId } = useParams<{ roomId: string }>()
+  const { id: roomId } = useParams<{ id: string }>() // Renamed from roomId to id to match route
   const navigate = useNavigate()
   const [messages, setMessages] = useState<Message[]>([])
   const [currentTrack, setCurrentTrack] = useState<Track>({})
@@ -81,8 +82,11 @@ const Room: React.FC<RoomProps> = ({ user }) => {
     })
 
     // Listen for participant updates
-    socket.on("participants", (users: string[]) => {
-      setParticipants(users)
+    socket.on("user-list", (users: { [key: string]: { roomId?: string; userName?: string } }) => {
+      const roomUsers = Object.values(users)
+        .filter(u => u.roomId === roomId)
+        .map(u => u.userName || "Anonymous")
+      setParticipants(roomUsers)
     })
 
     // Listen for room info
@@ -90,17 +94,14 @@ const Room: React.FC<RoomProps> = ({ user }) => {
       if (info.name) setRoomName(info.name)
     })
 
-    // Set loading to false after a short delay to ensure socket connection is established
-    setTimeout(() => {
-      setIsLoading(false)
-    }, 1000)
+    setTimeout(() => setIsLoading(false), 1000)
 
     return () => {
       console.log("Room component unmounting, leaving room:", roomId)
       socket.emit("leave-room", { roomId, userId: user.uid })
       socket.off("chat-message")
       socket.off("track-changed")
-      socket.off("participants")
+      socket.off("user-list")
       socket.off("room-info")
     }
   }, [roomId, user, navigate])
@@ -130,7 +131,7 @@ const Room: React.FC<RoomProps> = ({ user }) => {
     } else {
       navigator.clipboard
         .writeText(window.location.href)
-        .then(() => alert("Room link copied to clipboard!"))
+        .then(() => toast.success("Room link copied to clipboard!"))
         .catch((err) => console.error("Error copying:", err))
     }
   }
@@ -170,7 +171,6 @@ const Room: React.FC<RoomProps> = ({ user }) => {
   return (
     <div className="min-h-screen bg-gradient-to-b from-background to-secondary/20 py-6 px-4">
       <div className="container mx-auto max-w-6xl">
-        {/* Header with back button */}
         <div className="flex items-center mb-6">
           <Button variant="ghost" size="icon" onClick={() => navigate("/me")} className="mr-2">
             <ArrowLeft className="h-5 w-5" />
@@ -180,7 +180,6 @@ const Room: React.FC<RoomProps> = ({ user }) => {
         </div>
 
         <div className="flex flex-col md:flex-row gap-6">
-          {/* Left column - Player and Room Info */}
           <div className="w-full md:w-2/3 space-y-6">
             <Card className="shadow-lg border-primary/10 backdrop-blur-sm bg-card/80">
               <CardHeader className="pb-2">
@@ -204,7 +203,6 @@ const Room: React.FC<RoomProps> = ({ user }) => {
               </CardContent>
             </Card>
 
-            {/* Participants */}
             <Card className="shadow-lg border-primary/10 backdrop-blur-sm bg-card/80">
               <CardHeader className="pb-2">
                 <CardTitle className="text-lg flex items-center">
@@ -227,7 +225,6 @@ const Room: React.FC<RoomProps> = ({ user }) => {
             </Card>
           </div>
 
-          {/* Right column - Chat */}
           <div className="w-full md:w-1/3">
             <Chat roomId={roomId || ""} userId={user.uid} messages={messages} sendMessage={sendMessage} />
           </div>
@@ -238,4 +235,3 @@ const Room: React.FC<RoomProps> = ({ user }) => {
 }
 
 export default Room
-

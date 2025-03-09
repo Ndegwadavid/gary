@@ -99,7 +99,7 @@ const Sidebar = ({ user, mobileOpen, onMobileToggle }: SidebarProps) => {
                 <img src="/gary_logo.png" alt="Gary Logo" className="h-10 rounded-full" />
                 <Equalizer />
               </div>
-              <span className="text-xl font-bold gradient-text">Gary</span>
+              <span className="text-xl font-bold gradient-text">Gary Music</span>
             </div>
             <div className="flex-1 flex flex-col gap-4 p-4">
               <button
@@ -185,7 +185,7 @@ const Sidebar = ({ user, mobileOpen, onMobileToggle }: SidebarProps) => {
                 <img src="/gary_logo.png" alt="Gary Logo" className="h-10 rounded-full" />
                 <div className="absolute -right-1 -bottom-1 bg-music-primary h-3 w-3 rounded-full animate-pulse-slow"></div>
               </div>
-              <span className="text-xl font-bold gradient-text">Gary</span>
+              <span className="text-xl font-bold gradient-text">Gary Music</span>
               <Equalizer />
             </div>
             <button
