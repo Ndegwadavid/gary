@@ -1,0 +1,84 @@
+/* src/theme.css */
+:root {
+    /* Light theme variables */
+    --sidebar-bg: #ffffff;
+    --sidebar-fg: #333333;
+    --sidebar-muted: #f0f0f0;
+    --sidebar-accent: #e6e6e6;
+    --sidebar-accent-fg: #333333;
+    --sidebar-border: #e0e0e0;
+    
+    /* Music theme variables - light */
+    --music-primary: #8a2be2;
+    --music-secondary: #4b0082;
+    --music-accent: #9370db;
+    --music-highlight: #7b68ee;
+    --music-lowlight: #6a5acd;
+    --music-surface: #f0f0ff;
+    --music-text: #333333;
+  }
+  
+  .dark {
+    /* Dark theme variables */
+    --sidebar-bg: #121212;
+    --sidebar-fg: #e0e0e0;
+    --sidebar-muted: #282828;
+    --sidebar-accent: #333333;
+    --sidebar-accent-fg: #ffffff;
+    --sidebar-border: #333333;
+    
+    /* Music theme variables - dark */
+    --music-primary: #8a2be2;
+    --music-secondary: #4b0082;
+    --music-accent: #9370db;
+    --music-highlight: #7b68ee;
+    --music-lowlight: #483d8b;
+    --music-surface: #1e1b4b;
+    --music-text: #e0e0ff;
+  }
+  
+  /* Music-themed accents and decorations */
+  .gradient-text {
+    background: linear-gradient(45deg, var(--music-primary), var(--music-accent));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    font-weight: bold;
+  }
+  
+  .music-card {
+    background-color: var(--sidebar-bg);
+    border: 1px solid var(--sidebar-border);
+    border-radius: 0.5rem;
+    overflow: hidden;
+    position: relative;
+  }
+  
+  .music-card::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 5px;
+    background: linear-gradient(90deg, var(--music-primary), var(--music-secondary));
+  }
+  
+  /* Animated equalizer bars for music elements */
+  .equalizer-container {
+    display: flex;
+    align-items: flex-end;
+    height: 2rem;
+    gap: 2px;
+  }
+  
+  .equalizer-bar {
+    width: 4px;
+    background-color: var(--music-accent);
+    border-radius: 2px;
+  }
+  
+  .equalizer-bar:nth-child(1) { animation: equalizer 1s ease-in-out infinite; }
+  .equalizer-bar:nth-child(2) { animation: equalizer 1.3s ease-in-out infinite; }
+  .equalizer-bar:nth-child(3) { animation: equalizer 0.7s ease-in-out infinite; }
+  .equalizer-bar:nth-child(4) { animation: equalizer 1.1s ease-in-out infinite; }
