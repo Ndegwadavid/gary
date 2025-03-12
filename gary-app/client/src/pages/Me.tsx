@@ -5,9 +5,9 @@ import { useNavigate } from 'react-router-dom'
 import { User } from 'firebase/auth'
 import { auth, db } from '../firebase'
 import { useState, useEffect } from 'react'
-import { collection, query, where, onSnapshot } from 'firebase/firestore'
+import { collection, query, where, onSnapshot, doc, setDoc } from 'firebase/firestore'
 import { Music, PlusCircle, LogOut, ArrowRight, Sparkles, Users } from 'lucide-react'
-import { toast } from 'sonner' // Keep sonner for a success toast
+import { toast } from 'sonner'
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
 import { Button } from '../components/ui/button'
@@ -35,6 +35,8 @@ const Me: React.FC<MeProps> = ({ user }) => {
       const raves = snapshot.docs.map((doc) => doc.id)
       setMyRaves(raves)
       setIsLoading(false)
+    }, (error) => {
+      console.error('Error fetching my raves:', error)
     })
 
     return () => unsubscribe()
@@ -67,7 +69,41 @@ const Me: React.FC<MeProps> = ({ user }) => {
     }
   }
 
-  const createOrJoinRave = () => {
+  const createRave = async () => {
+    if (!raveIdInput.trim() || !/^[a-zA-Z0-9]+$/.test(raveIdInput.trim())) {
+      toast.error("Rave ID must contain only letters and numbers.")
+      return
+    }
+
+    setIsLoading(true)
+    const raveId = raveIdInput.trim()
+
+    try {
+      console.log('Creating rave:', raveId)
+      await setDoc(doc(db, 'raves', raveId), {
+        creator: user.uid,
+        createdAt: Date.now(),
+        userCount: 1,
+      }, { merge: true })
+      console.log('Rave created successfully:', raveId)
+      toast.success(
+        <div className="flex items-center gap-2 bg-green-500/10 backdrop-blur-md border border-green-500/20 rounded-lg p-4 shadow-lg text-green-100">
+          <svg className="w-5 h-5 animate-bounce" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+          </svg>
+          <span className="font-semibold">Rave "{raveId}" created!</span>
+        </div>,
+        { duration: 3000 }
+      )
+      navigate(`/rave/${raveId}`)
+    } catch (error) {
+      console.error('Error creating rave:', error)
+      toast.error('Failed to create rave')
+      setIsLoading(false)
+    }
+  }
+
+  const joinRave = () => {
     if (raveIdInput.trim() && /^[a-zA-Z0-9]+$/.test(raveIdInput.trim())) {
       setIsLoading(true)
       navigate(`/rave/${raveIdInput.trim()}`)
@@ -86,7 +122,6 @@ const Me: React.FC<MeProps> = ({ user }) => {
   return (
     <div className="min-h-screen bg-gradient-to-b from-background to-secondary/20 py-12 px-4">
       <div className="container mx-auto max-w-4xl">
-        {/* User Welcome */}
         <div className="flex flex-col items-center mb-12">
           <Avatar className="h-20 w-20 mb-4 bg-primary text-primary-foreground">
             <AvatarFallback className="text-xl font-semibold">{getUserInitials()}</AvatarFallback>
@@ -100,7 +135,6 @@ const Me: React.FC<MeProps> = ({ user }) => {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Create/Join Room Section */}
           <Card className="shadow-lg border-primary/10 backdrop-blur-sm bg-card/80">
             <CardHeader>
               <CardTitle className="flex items-center">
@@ -148,18 +182,17 @@ const Me: React.FC<MeProps> = ({ user }) => {
             </CardContent>
           </Card>
 
-          {/* Create/Join Rave Section */}
           <Card className="shadow-lg border-primary/10 backdrop-blur-sm bg-card/80">
             <CardHeader>
               <CardTitle className="flex items-center">
                 <Sparkles className="h-5 w-5 text-primary mr-2" />
                 Rave Experience
               </CardTitle>
-              <CardDescription>Join or create a rave with video chat</CardDescription>
+              <CardDescription>Create or join a rave with video chat</CardDescription>
             </CardHeader>
             <Separator />
             <CardContent className="pt-6 space-y-4">
-              <div className="space-y-2">
+              <div className="space-y-4">
                 <Input
                   type="text"
                   value={raveIdInput}
@@ -167,18 +200,28 @@ const Me: React.FC<MeProps> = ({ user }) => {
                   placeholder="Enter Rave ID (letters/numbers only)"
                   className="w-full"
                 />
-                <Button
-                  onClick={createOrJoinRave}
-                  variant="default"
-                  className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700"
-                  disabled={!raveIdInput.trim() || !/^[a-zA-Z0-9]+$/.test(raveIdInput.trim()) || isLoading}
-                >
-                  <Sparkles className="h-4 w-4 mr-2" />
-                  Create/Join Rave
-                </Button>
+                <div className="flex gap-2">
+                  <Button
+                    onClick={createRave}
+                    variant="default"
+                    className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700"
+                    disabled={!raveIdInput.trim() || !/^[a-zA-Z0-9]+$/.test(raveIdInput.trim()) || isLoading}
+                  >
+                    <PlusCircle className="h-4 w-4 mr-2" />
+                    Create Rave
+                  </Button>
+                  <Button
+                    onClick={joinRave}
+                    variant="secondary"
+                    className="w-full"
+                    disabled={!raveIdInput.trim() || !/^[a-zA-Z0-9]+$/.test(raveIdInput.trim()) || isLoading}
+                  >
+                    <ArrowRight className="h-4 w-4 mr-2" />
+                    Join Rave
+                  </Button>
+                </div>
               </div>
 
-              {/* My Raves Section */}
               <div className="mt-6">
                 <h3 className="text-sm font-medium mb-3 flex items-center">
                   <Sparkles className="h-4 w-4 text-primary mr-2" />
@@ -214,7 +257,6 @@ const Me: React.FC<MeProps> = ({ user }) => {
           </Card>
         </div>
 
-        {/* Bottom Actions */}
         <div className="mt-8 flex flex-col sm:flex-row gap-4 justify-center">
           <Button
             onClick={() => navigate('/rooms')}
